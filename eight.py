@@ -1,0 +1,97 @@
+import json
+import os
+import time
+from urllib import request, error, parse
+
+AUTH = 'https://auth-api.8slp.net/v1/tokens'
+CLIENT = 'https://client-api.8slp.net/v1'
+APP = 'https://app-api.8slp.net/v1'
+# Public client credentials published by the community pyEight client.
+CLIENT_ID = '0894c7f33bb94800a03f1f4df13a4f38'
+CLIENT_SECRET = 'f0954a3ed5763ba3d06834c73731a32f15f168f47d4f164751275def86db0c76'
+
+class ApiError(Exception):
+    pass
+
+class EightClient:
+    def __init__(self, email, password, transport=None):
+        self.email, self.password = email, password
+        self.transport = transport or self._http
+        self.token, self.expires, self.sides = None, 0, {}
+
+    @staticmethod
+    def _http(method, url, payload=None, token=None):
+        headers = {'Accept': 'application/json', 'User-Agent': 'd8sleep/1.0'}
+        body = None
+        if payload is not None:
+            body = json.dumps(payload).encode()
+            headers['Content-Type'] = 'application/json'
+        if token:
+            headers['Authorization'] = 'Bearer ' + token
+        try:
+            with request.urlopen(request.Request(url, data=body, method=method, headers=headers), timeout=20) as response:
+                data = response.read()
+                return json.loads(data) if data else {}
+        except error.HTTPError as exc:
+            if exc.code in (401, 403):
+                raise ApiError('Authentication failed or access expired.') from exc
+            raise ApiError(f'Eight Sleep returned HTTP {exc.code}.') from exc
+        except (error.URLError, TimeoutError, OSError, ValueError) as exc:
+            raise ApiError('Could not reach Eight Sleep. Check your connection and try again.') from exc
+
+    def authenticate(self):
+        result = self.transport('POST', AUTH, {'client_id': os.getenv('EIGHT_CLIENT_ID', CLIENT_ID),
+            'client_secret': os.getenv('EIGHT_CLIENT_SECRET', CLIENT_SECRET), 'grant_type': 'password',
+            'username': self.email, 'password': self.password}, None)
+        try:
+            self.token = result['access_token']
+            self.expires = time.time() + float(result['expires_in']) - 60
+        except (KeyError, ValueError, TypeError) as exc:
+            raise ApiError('Unexpected authentication response.') from exc
+
+    def call(self, method, url, payload=None):
+        if not self.token or time.time() >= self.expires:
+            self.authenticate()
+        return self.transport(method, url, payload, self.token)
+
+    def discover(self):
+        try:
+            devices = self.call('GET', CLIENT + '/users/me')['user']['devices']
+            if not devices:
+                raise ApiError('No Eight Sleep device found on this account.')
+            device = self.call('GET', CLIENT + '/devices/' + parse.quote(str(devices[0]), safe='') + '?filter=leftUserId,rightUserId,awaySides')['result']
+            ids = {device.get('leftUserId'): 'left', device.get('rightUserId'): 'right'}
+            for side, uid in (device.get('awaySides') or {}).items():
+                if uid:
+                    ids[uid] = side.lower()
+            self.sides = {side: uid for uid, side in ids.items() if uid and side in ('left', 'right', 'solo')}
+            if not self.sides:
+                raise ApiError('No assigned bed sides were found on this account.')
+        except (KeyError, TypeError, AttributeError) as exc:
+            raise ApiError('Unexpected device response from Eight Sleep.') from exc
+        return self.sides
+
+    def temperature(self, side, payload=None):
+        if side not in self.sides:
+            raise ApiError('Unknown bed side. Refresh and try again.')
+        uid = parse.quote(str(self.sides[side]), safe='')
+        return self.call('PUT' if payload is not None else 'GET', APP + '/users/' + uid + '/temperature', payload)
+
+    def status(self):
+        self.discover()
+        result = []
+        for side in self.sides:
+            data = self.temperature(side)
+            result.append({'side': side, 'power': data.get('currentState', {}).get('type') != 'off' if data.get('currentState', {}).get('type') else None,
+                           'target': data.get('currentLevel'), 'current': data.get('currentDeviceLevel')})
+        return result
+
+    def set_level(self, side, level):
+        if isinstance(level, bool) or not isinstance(level, int) or not -100 <= level <= 100:
+            raise ValueError('Level must be a whole number from -100 to 100.')
+        self.temperature(side, {'currentLevel': level})
+
+    def set_power(self, side, on):
+        if not isinstance(on, bool):
+            raise ValueError('Power must be on or off.')
+        self.temperature(side, {'currentState': {'type': 'smart' if on else 'off'}})
