@@ -62,8 +62,9 @@ class EightClient:
             device = self.call('GET', CLIENT + '/devices/' + parse.quote(str(devices[0]), safe='') + '?filter=leftUserId,rightUserId,awaySides')['result']
             ids = {device.get('leftUserId'): 'left', device.get('rightUserId'): 'right'}
             for side, uid in (device.get('awaySides') or {}).items():
-                if uid:
-                    ids[uid] = side.lower()
+                label = {'leftuserid': 'left', 'rightuserid': 'right', 'left': 'left', 'right': 'right', 'solo': 'solo'}.get(side.lower())
+                if uid and label:
+                    ids[uid] = label
             self.sides = {side: uid for uid, side in ids.items() if uid and side in ('left', 'right', 'solo')}
             if not self.sides:
                 raise ApiError('No assigned bed sides were found on this account.')

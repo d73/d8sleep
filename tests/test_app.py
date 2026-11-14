@@ -27,6 +27,16 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(sides[0]['target'], -20)
         self.assertEqual(sides[0]['current'], -15)
         self.assertTrue(all(call[3] == 'test-token' for call in self.fake.calls[1:]))
+    def test_discovery_handles_away_side_user_id_keys(self):
+        original = self.client.transport
+        def away_device(method, url, payload, token):
+            if '/devices/' in url:
+                return {'result': {'leftUserId': 'left-id', 'rightUserId': 'right-id',
+                                   'awaySides': {'leftUserId': 'left-id', 'rightUserId': 'right-id'}}}
+            return original(method, url, payload, token)
+        self.client.transport = away_device
+        self.assertEqual(self.client.discover(), {'left': 'left-id', 'right': 'right-id'})
+
     def test_control_targets_selected_side_and_validates_input(self):
         self.client.discover()
         self.client.set_level('right', -33)
