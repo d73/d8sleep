@@ -37,6 +37,22 @@ class ClientTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.client.set_level('left', 101)
         with self.assertRaises(ValueError): self.client.set_level('left', True)
         with self.assertRaises(ApiError): self.client.set_level('other', 1)
+    def test_status_caches_discovery_and_recovers_from_read_failure(self):
+        self.client.status()
+        self.client.status()
+        self.assertEqual(sum(c[1].endswith('/users/me') for c in self.fake.calls), 1)
+        original = self.client.transport
+        failed = False
+        def fail_once(method, url, payload, token):
+            nonlocal failed
+            if '/temperature' in url and not failed:
+                failed = True
+                raise ApiError('stale side')
+            return original(method, url, payload, token)
+        self.client.transport = fail_once
+        self.assertEqual(len(self.client.status()), 2)
+        self.assertEqual(sum(c[1].endswith('/users/me') for c in self.fake.calls), 2)
+
     def test_refreshes_expired_token(self):
         self.client.discover()
         self.client.expires = 0

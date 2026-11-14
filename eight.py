@@ -78,7 +78,17 @@ class EightClient:
         return self.call('PUT' if payload is not None else 'GET', APP + '/users/' + uid + '/temperature', payload)
 
     def status(self):
-        self.discover()
+        if not self.sides:
+            self.discover()
+        try:
+            return self._read_status()
+        except ApiError:
+            # Side assignments can change. Rediscover once on a read failure;
+            # never automatically repeat a temperature or power write.
+            self.discover()
+            return self._read_status()
+
+    def _read_status(self):
         result = []
         for side in self.sides:
             data = self.temperature(side)
