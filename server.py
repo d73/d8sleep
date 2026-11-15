@@ -59,11 +59,13 @@ class Handler(BaseHTTPRequestHandler):
             filename = {'/': 'index.html', '/app.js': 'app.js', '/style.css': 'style.css'}[self.path]
             mime = {'index.html':'text/html', 'app.js':'text/javascript', 'style.css':'text/css'}[filename]
             return self.send(200, (ROOT / 'static' / filename).read_bytes(), mime + '; charset=utf-8')
-        if self.path == '/api/status':
+        if self.path in ('/api/status', '/api/device'):
             with lock:
                 if client is None:
                     return self.send(401, {'error': 'Set EIGHT_EMAIL and EIGHT_PASSWORD in .env and restart d8sleep.'})
                 try:
+                    if self.path == '/api/device':
+                        return self.send(200, {'device': client.device_status()})
                     return self.send(200, {'sides': client.status(), 'pod_name': client.pod_name})
                 except ApiError as exc:
                     return self.send(502, {'error': str(exc)})

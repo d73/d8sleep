@@ -64,6 +64,20 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(len(self.client.status()), 2)
         self.assertEqual(sum(c[1].endswith('/users/me') for c in self.fake.calls), 2)
 
+    def test_device_status_is_allowlisted_and_handles_missing_fields(self):
+        original = self.client.transport
+        def device_response(method, url, payload, token):
+            if '/devices/' in url and '?' not in url:
+                return {'result': {'online': True, 'hasWater': False, 'deviceId': 'private-id', 'wifiInfo': {'password': 'private'}}}
+            return original(method, url, payload, token)
+        self.client.transport = device_response
+        result = self.client.device_status()
+        self.assertTrue(result['online'])
+        self.assertFalse(result['hasWater'])
+        self.assertIsNone(result['priming'])
+        self.assertNotIn('deviceId', result)
+        self.assertNotIn('wifiInfo', result)
+
     def test_refreshes_expired_token(self):
         self.client.discover()
         self.client.expires = 0
@@ -92,6 +106,19 @@ class ServerTests(unittest.TestCase):
     def test_rejects_cross_origin(self):
         status,_ = self.request('/api/login', {'email':'a','password':'b'}, 'http://evil.test')
         self.assertEqual(status, 403)
+    def test_device_endpoint_exposes_safe_status(self):
+        fake=FakeTransport()
+        server.client=EightClient('a', 'b', fake)
+        conn=HTTPConnection('127.0.0.1', self.httpd.server_port)
+        try:
+            conn.request('GET', '/api/device')
+            res=conn.getresponse(); data=json.loads(res.read())
+            self.assertEqual(res.status, 200)
+            self.assertIn('online', data['device'])
+            self.assertNotIn('leftUserId', data['device'])
+        finally:
+            conn.close(); server.client=None
+
     def test_control_with_fake_upstream(self):
         fake=FakeTransport()
         server.client = EightClient('a', 'b', fake)

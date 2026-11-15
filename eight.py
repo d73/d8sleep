@@ -19,6 +19,7 @@ class EightClient:
         self.transport = transport or self._http
         self.token, self.expires, self.sides = None, 0, {}
         self.pod_name = 'Pod'
+        self.device_id = None
 
     @staticmethod
     def _http(method, url, payload=None, token=None):
@@ -60,7 +61,8 @@ class EightClient:
             devices = self.call('GET', CLIENT + '/users/me')['user']['devices']
             if not devices:
                 raise ApiError('No Eight Sleep device found on this account.')
-            device = self.call('GET', CLIENT + '/devices/' + parse.quote(str(devices[0]), safe='') + '?filter=leftUserId,rightUserId,awaySides,modelString')['result']
+            self.device_id = str(devices[0])
+            device = self.call('GET', CLIENT + '/devices/' + parse.quote(self.device_id, safe='') + '?filter=leftUserId,rightUserId,awaySides,modelString')['result']
             self.pod_name = device.get('modelString') or 'Pod'
             ids = {device.get('leftUserId'): 'left', device.get('rightUserId'): 'right'}
             for side, uid in (device.get('awaySides') or {}).items():
@@ -95,9 +97,26 @@ class EightClient:
         result = []
         for side in self.sides:
             data = self.temperature(side)
-            result.append({'side': side, 'power': data.get('currentState', {}).get('type') != 'off' if data.get('currentState', {}).get('type') else None,
-                           'target': data.get('currentLevel'), 'current': data.get('currentDeviceLevel')})
+            state = data.get('currentState') or {}
+            smart = data.get('smart') or {}
+            timed = data.get('timeBased') or {}
+            result.append({'side': side, 'power': state.get('type') != 'off' if state.get('type') else None,
+                           'target': data.get('currentLevel'), 'current': data.get('currentDeviceLevel'),
+                           'mode': state.get('type'), 'mode_started': state.get('started'),
+                           'schedule_type': data.get('scheduleType'),
+                           'smart': {k: smart.get(k) for k in ('bedTimeLevel', 'initialSleepLevel', 'finalSleepLevel')},
+                           'timed': {k: timed.get(k) for k in ('level', 'durationSeconds')}})
         return result
+
+    def device_status(self):
+        if not self.device_id:
+            self.discover()
+        data = self.call('GET', CLIENT + '/devices/' + parse.quote(self.device_id, safe='')).get('result', {})
+        # Do not send device IDs, account details or network information to the browser.
+        fields = ('online', 'hasWater', 'needsPriming', 'priming', 'isTemperatureAvailable',
+                  'lastHeard', 'lastPrime', 'firmwareVersion', 'firmwareUpdating',
+                  'leftNowHeating', 'rightNowHeating', 'leftHeatingDuration', 'rightHeatingDuration')
+        return {key: data.get(key) for key in fields}
 
     def set_level(self, side, level):
         if isinstance(level, bool) or not isinstance(level, int) or not -100 <= level <= 100:
