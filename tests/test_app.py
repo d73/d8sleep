@@ -78,6 +78,34 @@ class ClientTests(unittest.TestCase):
         self.assertNotIn('deviceId', result)
         self.assertNotIn('wifiInfo', result)
 
+    def test_session_biometrics_selects_latest_and_allowlists_data(self):
+        original = self.client.transport
+        def transport(method, url, payload, token):
+            if url.endswith('/intervals'):
+                return {'intervals': [
+                    {'ts': '2026-01-01T00:00:00Z', 'timeseries': {}},
+                    {'ts': '2026-01-02T00:00:00Z', 'presenceEnd': '2026-01-02T02:00:00Z',
+                     'incomplete': True, 'device': {'id': 'secret-device'}, 'id': 'secret-session',
+                     'timeseries': {'heartRate': [['2026-01-02T01:20:00Z', 60], ['2026-01-02T01:00:00Z', 55]],
+                                    'hrv': [['bad-date', 1]], 'tempBedC': [['2026-01-02T01:00:00Z', 25.5]]}}
+                ]}
+            return original(method, url, payload, token)
+        self.client.transport = transport
+        result = self.client.session_biometrics('left')
+        self.assertEqual(result['start'], '2026-01-02T00:00:00Z')
+        self.assertEqual(result['metrics']['heartRate']['value'], 60)
+        self.assertEqual(result['metrics']['tempBedC']['value'], 25.5)
+        self.assertIsNone(result['metrics']['hrv'])
+        self.assertIsNone(result['metrics']['tempRoomC'])
+        self.assertNotIn('id', result)
+        self.assertNotIn('device', result)
+        with self.assertRaises(ValueError): self.client.session_biometrics('unknown')
+
+    def test_session_biometrics_empty_response(self):
+        original = self.client.transport
+        self.client.transport = lambda method,url,payload,token: {'intervals': []} if url.endswith('/intervals') else original(method,url,payload,token)
+        self.assertIsNone(self.client.session_biometrics('left'))
+
     def test_refreshes_expired_token(self):
         self.client.discover()
         self.client.expires = 0
@@ -118,6 +146,25 @@ class ServerTests(unittest.TestCase):
             self.assertNotIn('leftUserId', data['device'])
         finally:
             conn.close(); server.client=None
+
+    def test_session_endpoint_validates_side_and_hides_identifiers(self):
+        fake=FakeTransport()
+        def transport(method,url,payload,token):
+            if url.endswith('/intervals'):
+                return {'intervals': [{'ts':'2026-01-02T00:00:00Z','id':'private','timeseries':{'hrv':[['2026-01-02T01:00:00Z',42]]}}]}
+            return fake(method,url,payload,token)
+        server.client=EightClient('a', 'b', transport)
+        conn=HTTPConnection('127.0.0.1', self.httpd.server_port)
+        try:
+            conn.request('GET', '/api/session?side=left')
+            res=conn.getresponse(); data=json.loads(res.read())
+            self.assertEqual(res.status, 200)
+            self.assertEqual(data['session']['metrics']['hrv']['value'],42)
+            self.assertNotIn('private', json.dumps(data))
+            conn.request('GET', '/api/session?side=invalid')
+            res=conn.getresponse();res.read();self.assertEqual(res.status,400)
+        finally:
+            conn.close();server.client=None
 
     def test_control_with_fake_upstream(self):
         fake=FakeTransport()

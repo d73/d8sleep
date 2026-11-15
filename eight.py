@@ -1,4 +1,6 @@
 import json
+import math
+from datetime import datetime, timezone
 import os
 import time
 from urllib import request, error, parse
@@ -117,6 +119,48 @@ class EightClient:
                   'lastHeard', 'lastPrime', 'firmwareVersion', 'firmwareUpdating',
                   'leftNowHeating', 'rightNowHeating', 'leftHeatingDuration', 'rightHeatingDuration')
         return {key: data.get(key) for key in fields}
+
+    def session_biometrics(self, side):
+        if not self.sides:
+            self.discover()
+        if side not in self.sides:
+            raise ValueError('Unknown bed side.')
+        uid = parse.quote(str(self.sides[side]), safe='')
+        response = self.call('GET', CLIENT + '/users/' + uid + '/intervals')
+        intervals = response.get('intervals') or []
+
+        def timestamp(value):
+            if not isinstance(value, str):
+                return None
+            try:
+                dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                return dt.astimezone(timezone.utc).timestamp() if dt.tzinfo else None
+            except (ValueError, OverflowError):
+                return None
+
+        candidates = [x for x in intervals if isinstance(x, dict) and timestamp(x.get('ts')) is not None]
+        if not candidates:
+            return None
+        session = max(candidates, key=lambda x: timestamp(x['ts']))
+        series = session.get('timeseries') or {}
+        if not isinstance(series, dict):
+            series = {}
+        metrics = {}
+        for key in ('heartRate', 'hrv', 'respiratoryRate', 'tempBedC', 'tempRoomC'):
+            samples = series.get(key) or []
+            if not isinstance(samples, list):
+                samples = []
+            valid = [x for x in samples if isinstance(x, (list, tuple)) and len(x) >= 2
+                     and timestamp(x[0]) is not None and isinstance(x[1], (int, float))
+                     and not isinstance(x[1], bool) and math.isfinite(x[1])]
+            if valid:
+                sample = max(valid, key=lambda x: timestamp(x[0]))
+                metrics[key] = {'timestamp': sample[0], 'value': sample[1]}
+            else:
+                metrics[key] = None
+        return {'start': session.get('ts'), 'presence_end': session.get('presenceEnd'),
+                'incomplete': session.get('incomplete') if isinstance(session.get('incomplete'), bool) else None,
+                'metrics': metrics}
 
     def set_level(self, side, level):
         if isinstance(level, bool) or not isinstance(level, int) or not -100 <= level <= 100:

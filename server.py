@@ -4,7 +4,7 @@ import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import RLock
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 from eight import EightClient, ApiError
 
 ROOT = Path(__file__).resolve().parent
@@ -59,12 +59,22 @@ class Handler(BaseHTTPRequestHandler):
             filename = {'/': 'index.html', '/app.js': 'app.js', '/style.css': 'style.css'}[self.path]
             mime = {'index.html':'text/html', 'app.js':'text/javascript', 'style.css':'text/css'}[filename]
             return self.send(200, (ROOT / 'static' / filename).read_bytes(), mime + '; charset=utf-8')
-        if self.path in ('/api/status', '/api/device'):
+        parsed = urlsplit(self.path)
+        if parsed.path in ('/api/status', '/api/device', '/api/session'):
             with lock:
                 if client is None:
                     return self.send(401, {'error': 'Set EIGHT_EMAIL and EIGHT_PASSWORD in .env and restart d8sleep.'})
                 try:
-                    if self.path == '/api/device':
+                    if parsed.path == '/api/session':
+                        query = parse_qs(parsed.query)
+                        sides = query.get('side', [])
+                        if len(sides) != 1 or sides[0] not in ('left', 'right', 'solo'):
+                            return self.send(400, {'error': 'Specify a valid side.'})
+                        try:
+                            return self.send(200, {'session': client.session_biometrics(sides[0])})
+                        except ValueError as exc:
+                            return self.send(400, {'error': str(exc)})
+                    if parsed.path == '/api/device':
                         return self.send(200, {'device': client.device_status()})
                     return self.send(200, {'sides': client.status(), 'pod_name': client.pod_name})
                 except ApiError as exc:
