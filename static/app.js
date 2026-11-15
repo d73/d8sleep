@@ -64,7 +64,7 @@ function tile(name,value,stamp,withDot=false){
   helpFor(box,name);return box;
 }
 function choiceTile(name,options,current){
-  const box=document.createElement('div'),label=document.createElement('span'),chips=document.createElement('div');label.textContent=name;chips.className='choices';
+  const box=document.createElement('div'),label=document.createElement('span'),chips=document.createElement('div');if(name==='Session state')box.classList.add('session-state');label.textContent=name;chips.className='choices';
   const list=options.slice();if(current!==null&&current!==undefined&&!list.some(o=>o[0]===current))list.push([current,String(current)]);
   for(const [value,text] of list){const chip=document.createElement('em');chip.textContent=text;if(value===current){chip.className='on';chip.setAttribute('aria-current','true');}chips.append(chip);}
   box.append(label,chips);helpFor(box,name);return box;

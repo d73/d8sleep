@@ -103,3 +103,6 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border:3px solid #f0f
 @media(min-width:1200px){#drawer-status{width:clamp(340px,calc((100vw - 480px)/2 - 32px),680px)}}
 
 #live-status{grid-template-columns:repeat(2,minmax(0,1fr))}.status-dot{right:50px}
+
+/* Keep the session-state options legible and clear of the help button. */
+.session-meta .session-state{flex:1 1 100%}.session-meta .session-state .choices{border:0;overflow:visible;gap:4px}.session-meta .session-state .choices em{border:1px solid #596371;border-radius:999px}.session-meta .session-state .choices em.on{border-color:#8a7cc0}.metric-tile.has-help,.segment-grid>div.has-help,.session-meta>div.has-help,.technical-details .live-grid>div.has-help{padding-right:50px}
