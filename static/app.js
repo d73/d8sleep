@@ -31,30 +31,34 @@ function choiceTile(name,options,current){
 }
 function when(value){if(!value)return '—';const date=new Date(value);return Number.isNaN(date.getTime())?'—':date.toLocaleString();}
 function renderLive(){
-  const hero=$('live-status'),segments=$('live-segments'),details=$('live-details'),d=deviceData,side=sides.find(s=>s.side===selected);
-  hero.replaceChildren();segments.replaceChildren();details.replaceChildren();
+  const strip=$('status-strip'), hero=$('live-status'), details=$('live-details'), d=deviceData, side=sides.find(s=>s.side===selected);
+  strip.replaceChildren();hero.replaceChildren();details.replaceChildren();
   const level=value=>Number.isInteger(value)?displayLevel(value):'—';
   const yesNo=(value,yes='Yes',no='No')=>typeof value==='boolean'?(value?yes:no):'—';
-  const bool=(name,value,yes='Yes',no='No')=>choiceTile(name,[[true,yes],[false,no]],typeof value==='boolean'?value:null);
+  const tag=(text,state)=>{const item=document.createElement('span'),dot=document.createElement('i'),label=document.createElement('span');item.className='status-tag';dot.className=state===true?'status-tag-dot good':state===false?'status-tag-dot bad':'status-tag-dot';dot.setAttribute('aria-hidden','true');label.textContent=text;item.append(dot,label);strip.append(item);};
+  tag(yesNo(d?.online,'Online','Offline')==='—'?'Connection unknown':yesNo(d?.online,'Online','Offline'),d?.online);
+  tag(yesNo(d?.hasWater,'Water OK','Water low / absent')==='—'?'Water unknown':yesNo(d?.hasWater,'Water OK','Water low / absent'),d?.hasWater);
+  tag(yesNo(d?.isTemperatureAvailable,'Temp ready','Temp unavailable')==='—'?'Temp availability unknown':yesNo(d?.isTemperatureAvailable,'Temp ready','Temp unavailable'),d?.isTemperatureAvailable);
+  const fw=document.createElement('span');fw.className='status-firmware';fw.textContent=`FW ${d?.firmwareVersion||'—'}`;strip.append(fw);
+  const card=(title)=>{const box=document.createElement('div'),label=document.createElement('span');box.className='bento-card';label.className='bento-label';label.textContent=title;box.append(label);return box;};
+  const line=(box,value,cls)=>{const text=document.createElement('span');text.className=cls;text.textContent=value;box.append(text);};
   const modes=[['off','Off'],['smart:bedtime','Bedtime'],['smart:initial','Early sleep'],['smart:final','Late sleep']];
-  const powerTile=tile('Side power',yesNo(side?.power,'On','Off'),null,side?.power===true);
-  powerTile.append(choiceList([[true,'On'],[false,'Off']],typeof side?.power==='boolean'?side.power:null));hero.append(powerTile);
   const modeLabels={'off':'Off','smart:bedtime':'Bedtime','smart:initial':'Early sleep','smart:final':'Late sleep'};
-  const modeTile=tile('Active mode',modeLabels[side?.mode]||side?.mode||'—');modeTile.append(choiceList(modes,side?.mode||null));hero.append(modeTile);
-  const waterTile=tile('Water',yesNo(d?.hasWater,'Present','Low / absent'));waterTile.append(choiceList([[true,'Present'],[false,'Low / absent']],typeof d?.hasWater==='boolean'?d.hasWater:null));hero.append(waterTile);
-  hero.append(tile('Target / Now',`${level(side?.target)} / ${side?.power===false?'—':level(side?.current)}`));
-  segments.append(bool('Connection',d?.online,'Online','Offline'));
-  segments.append(choiceTile('Schedule type',[['smart','Smart'],['timeBased','Timed']],side?.schedule_type||null));
-  segments.append(choiceTile('Selected side',[['left','Left'],['right','Right'],['solo','Solo']],side?.side||null));
-  if(d){
-    details.append(bool('Priming',d.priming,'In progress','Not running'),bool('Needs priming',d.needsPriming),bool('Temperature available',d.isTemperatureAvailable));
-    details.append(tile('Last heard',when(d.lastHeard)),tile('Last primed',when(d.lastPrime)),tile('Firmware',d.firmwareVersion||'—'),bool('Firmware updating',d.firmwareUpdating));
-  }
-  if(side){
-    const running=side.side==='left'?d?.leftNowHeating:side.side==='right'?d?.rightNowHeating:null;
-    details.append(tile('Mode started',when(side.mode_started)),bool('Temperature running',running));
-    details.append(tile('Bedtime level',level(side.smart?.bedTimeLevel)),tile('Early sleep level',level(side.smart?.initialSleepLevel)),tile('Late sleep level',level(side.smart?.finalSleepLevel)),tile('Timed level',level(side.timed?.level)),tile('Timed duration (configured)',Number.isFinite(side.timed?.durationSeconds)?`${side.timed.durationSeconds} seconds`:'—'));
-  }
+  const mode=modeLabels[side?.mode]||side?.mode||'—';
+  const active=card('Active state');
+  line(active,side?.power===false?'Off':side?.power===true?`On · ${mode}`:'Power unknown',side?.power===true?'bento-value active':'bento-value');
+  const powerChoices=choiceList([[true,'On'],[false,'Off']],typeof side?.power==='boolean'?side.power:null);powerChoices.setAttribute('role','group');powerChoices.setAttribute('aria-label','Power states');active.append(powerChoices);
+  const modeChoices=choiceList(modes,side?.mode||null);modeChoices.setAttribute('role','group');modeChoices.setAttribute('aria-label','Known modes');active.append(modeChoices);
+  line(active,`Started ${when(side?.mode_started)} · Side: ${side?.side?side.side.charAt(0).toUpperCase()+side.side.slice(1):'—'}`,'bento-subtext');hero.append(active);
+  const thermal=card('Thermal');line(thermal,level(side?.target),'bento-value');
+  line(thermal,`Currently ${side?.power===false?'—':level(side?.current)}`,'bento-subtext');
+  const schedule=choiceList([['smart','Smart'],['timeBased','Timed']],side?.schedule_type||null);schedule.setAttribute('role','group');schedule.setAttribute('aria-label','Schedule types');thermal.append(schedule);hero.append(thermal);
+  const stat=(name,value)=>{const item=document.createElement('div'),label=document.createElement('span'),text=document.createElement('strong');label.textContent=name;text.textContent=value;item.append(label,text);details.append(item);};
+  stat('Bedtime level',level(side?.smart?.bedTimeLevel));stat('Early sleep level',level(side?.smart?.initialSleepLevel));stat('Late sleep level',level(side?.smart?.finalSleepLevel));
+  stat('Timed level',level(side?.timed?.level));stat('Timed duration (configured)',Number.isFinite(side?.timed?.durationSeconds)?`${side.timed.durationSeconds} seconds`:'—');
+  stat('Priming',yesNo(d?.priming,'In progress','Not running'));stat('Needs priming',yesNo(d?.needsPriming));stat('Firmware updating',yesNo(d?.firmwareUpdating));
+  stat('Last heard',when(d?.lastHeard));stat('Last primed',when(d?.lastPrime));
+  const running=side?.side==='left'?d?.leftNowHeating:side?.side==='right'?d?.rightNowHeating:null;stat('Temperature running',yesNo(running));
 }
 let sessionRequest=0, sessionInFlight=null;
 function renderSession(){
