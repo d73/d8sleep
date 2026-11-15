@@ -38,7 +38,6 @@ function renderLive(){
   const tag=(text,state)=>{const item=document.createElement('span'),dot=document.createElement('i'),label=document.createElement('span');item.className='status-tag';dot.className=state===true?'status-tag-dot good':state===false?'status-tag-dot bad':'status-tag-dot';dot.setAttribute('aria-hidden','true');label.textContent=text;item.append(dot,label);strip.append(item);};
   tag(yesNo(d?.online,'Online','Offline')==='—'?'Connection unknown':yesNo(d?.online,'Online','Offline'),d?.online);
   tag(yesNo(d?.hasWater,'Water','Water low / absent')==='—'?'Water unknown':yesNo(d?.hasWater,'Water','Water low / absent'),d?.hasWater);
-  tag(yesNo(d?.isTemperatureAvailable,'Temp ready','Temp unavailable')==='—'?'Temp availability unknown':yesNo(d?.isTemperatureAvailable,'Temp ready','Temp unavailable'),d?.isTemperatureAvailable);
   const fw=document.createElement('span');fw.className='status-firmware';fw.textContent=`FW ${d?.firmwareVersion||'—'}`;strip.append(fw);
   const card=(title)=>{const box=document.createElement('div'),label=document.createElement('span');box.className='bento-card';label.className='bento-label';label.textContent=title;box.append(label);return box;};
   const line=(box,value,cls)=>{const text=document.createElement('span');text.className=cls;text.textContent=value;box.append(text);};
