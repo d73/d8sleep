@@ -33,3 +33,5 @@ button:disabled, input:disabled { opacity: .45; cursor: wait; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 
 header h1{font-size:20px;letter-spacing:-.03em;margin:0} .details{margin-top:25px}
+
+.slider-ticks{display:flex;justify-content:space-between;margin:0 8px 8px}.slider-ticks span{width:1px;height:6px;background:#8b93a3}.slider-ticks span:nth-child(11){height:10px;background:#c0b3eb}

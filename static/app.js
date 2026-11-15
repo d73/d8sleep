@@ -1,17 +1,48 @@
 'use strict';
 const $ = id => document.getElementById(id);
-let sides = [], selected = null, unit = 'F', busy = false;
-document.querySelectorAll('#slider,#minus,#plus,#power').forEach(x=>x.disabled=true);
+let sides = [], selected = null, unit = 'F', busy = false, levelRunning = false, queuedLevel = null, dragging = false;
+document.querySelectorAll('#slider,#power').forEach(x=>x.disabled=true);
 // Approximate community-derived mapping; levels are not thermometer readings.
 const points = [[-100,55],[-90,61],[-58,68],[-17,77],[1,81],[17,86],[44,95],[72,104],[92,110],[100,111]];
 function degrees(level) { if (typeof level !== 'number' || level < -100 || level > 100) return '—'; let f=points[0][1]; for(let i=1;i<points.length;i++){ const [x,y]=points[i], [px,py]=points[i-1]; if(level<=x){f=py+(y-py)*(level-px)/(x-px);break;} } return `${Math.round(unit==='F'?f:(f-32)*5/9)}°${unit}`; }
 function say(text, online=false){ $('message').textContent=text; $('connection').textContent=online?'Connected':'Needs attention'; $('connection').classList.toggle('online',online); }
 async function api(path, body){ let response; try {response=await fetch(path, body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{cache:'no-store'});} catch {throw Error('Can’t reach d8sleep. Check your connection.');} const data=await response.json(); if(!response.ok) {const error=Error(data.error || 'Something went wrong.'); error.status=response.status;throw error;} return data; }
 function displayLevel(raw){const n=raw/10;return (n>0?'+':'')+n.toFixed(1).replace(/\.0$/,'');}
-function render(){ const item=sides.find(x=>x.side===selected); if(!item)return; $('sides').replaceChildren(); if(sides.length>1) for(const s of sides){const b=document.createElement('button');b.textContent=s.side[0].toUpperCase()+s.side.slice(1);b.className=s.side===selected?'active':'';b.onclick=()=>{selected=s.side;render();};$('sides').append(b);} const level=Number.isInteger(item.target)?item.target:null; $('value').textContent=level===null?'—':displayLevel(level); $('slider').value=level===null?0:Math.round(level/10); $('current').textContent=Number.isInteger(item.current)?displayLevel(item.current):'Unavailable'; $('estimate').textContent=`Estimated target ${degrees(level)}`; $('power').textContent=item.power===null?'Power unavailable':item.power?'On':'Off'; $('power').setAttribute('aria-pressed',String(item.power===true)); $('power').disabled=busy || item.power===null; for(const x of document.querySelectorAll('#slider,#minus,#plus'))x.disabled=busy || level===null; }
+function render(){ const item=sides.find(x=>x.side===selected); if(!item)return; $('sides').replaceChildren(); if(sides.length>1) for(const s of sides){const b=document.createElement('button');b.textContent=s.side[0].toUpperCase()+s.side.slice(1);b.className=s.side===selected?'active':'';b.disabled=busy;b.onclick=()=>{selected=s.side;render();};$('sides').append(b);} const level=Number.isInteger(item.target)?item.target:null; if(!dragging){$('value').textContent=level===null?'—':displayLevel(level); $('slider').value=level===null?0:Math.round(level/10);} $('current').textContent=Number.isInteger(item.current)?displayLevel(item.current):'Unavailable'; if(!dragging)$('estimate').textContent=`Estimated target ${degrees(level)}`; $('power').textContent=item.power===null?'Power unavailable':item.power?'On':'Off'; $('power').setAttribute('aria-pressed',String(item.power===true)); $('power').disabled=busy || item.power===null; for(const x of document.querySelectorAll('#slider'))x.disabled=(busy && !levelRunning) || level===null; }
 function update(data){sides=data.sides;if(!sides.some(s=>s.side===selected))selected=sides[0]?.side;render();say('',true);}
 async function refresh(){try{update(await api('/api/status'));}catch(e){say(e.message);}}
 async function change(path, data){if(busy)return;busy=true;render();say('Updating…',true);try{update(await api(path,data));}catch(e){say(e.message);await refreshAfterError();}finally{busy=false;render();}}
 async function refreshAfterError(){try{const data=await api('/api/status');sides=data.sides;}catch{}}
-function level(n){change('/api/level',{side:selected,level:Math.max(-10,Math.min(10,n))*10});}
-$('minus').onclick=()=>level(Number($('slider').value)-1);$('plus').onclick=()=>level(Number($('slider').value)+1);$('slider').oninput=()=>{$('value').textContent=displayLevel(Number($('slider').value)*10);$('estimate').textContent=`Estimated target ${degrees(Number($('slider').value)*10)}`;};$('slider').onchange=()=>level(Number($('slider').value));$('power').onclick=()=>change('/api/power',{side:selected,on:!sides.find(s=>s.side===selected).power});$('units').onclick=()=>{unit=unit==='F'?'C':'F';render();};refresh();
+function level(n){
+  if(busy && !levelRunning)return;
+  const raw=Math.max(-10,Math.min(10,n))*10, item=sides.find(s=>s.side===selected);
+  if(!item)return;
+  item.target=raw;
+  queuedLevel={side:selected,level:raw};
+  busy=true; levelRunning=true; render(); say('Updating…',true);
+  if(!levelSending) void sendLevels();
+}
+let levelSending=false;
+async function sendLevels(){
+  levelSending=true;
+  try{
+    while(queuedLevel){
+      const request=queuedLevel; queuedLevel=null;
+      const data=await api('/api/level',request);
+      sides=data.sides;
+      if(queuedLevel){
+        const pending=sides.find(s=>s.side===queuedLevel.side);
+        if(pending)pending.target=queuedLevel.level;
+      }
+      render();
+    }
+    say('',true);
+  }catch(e){
+    queuedLevel=null; levelRunning=false; render();
+    await refreshAfterError();
+    say(e.message);
+  }finally{
+    levelSending=false; levelRunning=false; busy=false; render();
+  }
+}
+$('slider').oninput=()=>{dragging=true;$('value').textContent=displayLevel(Number($('slider').value)*10);$('estimate').textContent=`Estimated target ${degrees(Number($('slider').value)*10)}`;};$('slider').onchange=()=>{dragging=false;level(Number($('slider').value));};$('power').onclick=()=>change('/api/power',{side:selected,on:!sides.find(s=>s.side===selected).power});$('units').onclick=()=>{unit=unit==='F'?'C':'F';render();};refresh();

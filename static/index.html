@@ -13,7 +13,7 @@
 <section id="control" class="card" aria-label="Bed temperature controls">
 <div class="card-top"><h2>Temperature</h2><button id="power" class="power" aria-pressed="false">Power</button></div>
 <div id="sides" class="sides" aria-label="Bed side"></div>
-<div class="readout"><span class="readout-label">TARGET LEVEL</span><div><button id="minus" class="step" aria-label="Decrease level">−</button><strong id="value">—</strong><button id="plus" class="step" aria-label="Increase level">+</button></div><span id="estimate" class="estimate">Estimated target —</span></div>
-<label for="slider" class="sr-only">Target heating level</label><input id="slider" type="range" min="-10" max="10" step="1" value="0"><div class="range-labels"><span>COOLER</span><span>WARMER</span></div>
+<div class="readout"><span class="readout-label">TARGET LEVEL</span><div><strong id="value">—</strong></div><span id="estimate" class="estimate">Estimated target —</span></div>
+<label for="slider" class="sr-only">Target heating level</label><input id="slider" type="range" min="-10" max="10" step="1" value="0"><div class="slider-ticks" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="range-labels"><span>−10</span><span>0</span><span>+10</span></div>
 <div class="details"><span>Current device level <strong id="current">—</strong></span><button id="units" class="unit">°F / °C</button></div>
 </section><p id="message" class="message" role="status" aria-live="polite"></p></main></body></html>
