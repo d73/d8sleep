@@ -130,3 +130,6 @@ main{padding-top:16px}.card-identity{display:flex;align-items:center;gap:10px;mi
 .session-bento .bento-value{font-size:18px}.bento-grid small{display:block;color:#a9b3c1;font-size:10px;margin-top:5px;overflow-wrap:anywhere}.bento-grid .choices{display:flex;width:fit-content;max-width:100%;border:0;overflow:visible;gap:3px;margin-top:5px}.bento-grid .choices em{border:1px solid #46515f;border-radius:999px;white-space:normal;overflow-wrap:anywhere;max-width:100%;font-size:10px;padding:3px 6px}.bento-grid .choices em.on{border-color:#8492a4;background:#4b5565}
 
 .status-tag-dot.pending{background:#d8ba79}
+
+#drawer-session{container-type:inline-size}
+@media(min-width:1200px){#drawer-session{width:clamp(340px,calc((100vw - 480px)/2 - 32px),680px)}}
