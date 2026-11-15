@@ -74,7 +74,6 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border:3px solid #f0f
 
 .session-choices{display:flex;gap:5px;flex-wrap:wrap}.live-grid .session-choice{display:inline-block;color:#737e90;border:1px solid #3a4251;border-radius:8px;padding:3px 6px;margin:0;font-size:11px}.live-grid .session-choice.active{color:#e7e0fb;background:#51466c;border-color:#8a78b3;font-weight:700}
 
-.has-help{cursor:help}.has-help>span:first-child{text-decoration:underline dotted #6b7587;text-underline-offset:3px}
 /* Give Pod status more room without pushing it beyond the screen. */
 #drawer-status{width:min(94vw,680px);container-type:inline-size}
 #drawer-status .live-grid>div{padding:8px}
@@ -94,7 +93,6 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border:3px solid #f0f
 .choices{display:inline-flex;gap:0;border:1px solid #596371;border-radius:999px;overflow:hidden;max-width:100%;flex-wrap:wrap}.choices em{border:0;border-radius:0;padding:4px 8px;opacity:1;color:#8993a2;font-size:11px}.choices em.on{border:0;border-radius:999px;background:#4b5565;color:#fff}
 .technical-details{margin-top:12px;background:#252d3a;border-radius:12px;padding:12px}.technical-details summary{cursor:pointer;font-weight:600;font-size:13px}.technical-details .live-grid{margin-top:10px}.technical-details .live-grid>div{border-radius:0;padding:9px}
 .session-meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}.session-meta>div{flex:1 1 140px;padding:9px}.session-meta strong{font-size:12px;overflow-wrap:anywhere}.session-respiratory{margin-top:8px}.delayed{color:#e79b95}.sheet-handle{display:none}
-.help-button{position:absolute;top:8px;right:8px;min-width:36px;min-height:36px;padding:0;border:1px solid #667282;border-radius:50%;background:transparent;color:#c0c9d6;font-size:12px;cursor:pointer}.has-help .metric-label{padding-right:28px}
 @media(max-width:1199px){
  .drawer,#drawer-status{position:fixed;top:auto;bottom:0;left:0;right:0;width:100%;max-height:75vh;max-height:75dvh;border:1px solid #303645;border-radius:22px 22px 0 0;transform:translateY(100%);overflow-y:auto}
  .drawer.open,#drawer-status.open{transform:translateY(0)}
@@ -102,15 +100,13 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border:3px solid #f0f
 }
 @media(min-width:1200px){#drawer-status{width:clamp(340px,calc((100vw - 480px)/2 - 32px),680px)}}
 
-#live-status{grid-template-columns:repeat(2,minmax(0,1fr))}.status-dot{right:50px}
+#live-status{grid-template-columns:repeat(2,minmax(0,1fr))}.status-dot{right:14px}
 
-/* Keep the session-state options legible and clear of the help button. */
-.session-meta .session-state{flex:1 1 100%}.session-meta .session-state .choices{border:0;overflow:visible;gap:4px}.session-meta .session-state .choices em{border:1px solid #596371;border-radius:999px}.session-meta .session-state .choices em.on{border-color:#8a7cc0}.metric-tile.has-help,.segment-grid>div.has-help,.session-meta>div.has-help,.technical-details .live-grid>div.has-help{padding-right:50px}
+/* Keep the session-state options legible. */
+.session-meta .session-state{flex:1 1 100%}.session-meta .session-state .choices{border:0;overflow:visible;gap:4px}.session-meta .session-state .choices em{border:1px solid #596371;border-radius:999px}.session-meta .session-state .choices em.on{border-color:#8a7cc0}
 
-/* Compact data and help presented above the panels without changing tile sizes. */
+/* Compact panel data. */
 .metric-tile strong{font-size:18px}
-.help-popover{position:fixed;z-index:100;max-width:min(260px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;padding:11px 13px;border:1px solid #3a4150;border-radius:10px;background:#252c38;color:#e5eaf2;font-size:13px;line-height:1.45;box-shadow:0 10px 24px #0009;overflow-wrap:anywhere}
-.help-popover[hidden]{display:none}
 
 /* Panel triggers sit on the card edges and stay inside the viewport. */
 .tabs{position:absolute;inset:0;z-index:3;display:block;margin:0;pointer-events:none}
