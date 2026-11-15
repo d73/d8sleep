@@ -2,8 +2,6 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: radial-gradient(ellipse at 50% -10%, #28334a 0, transparent 50%), #10141c; min-height: 100vh; }
 main { width: min(100% - 32px, 480px); margin: auto; padding-bottom: 24px; }
-header { height: 56px; display: flex; justify-content: space-between; align-items: center; }
-header h1 { font-size: 18px; font-weight: 700; letter-spacing: -.04em; margin: 0; }
 .connection { font-size: 12px; color: #a9b0bd; }
 .connection:before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #818c9d; margin-right: 7px; }
 .connection.online:before { background: #8dc9b4; }
@@ -32,7 +30,7 @@ button:disabled, input:disabled { opacity: .45; cursor: wait; }
 :focus-visible { outline: 2px solid #c5b7fa; outline-offset: 3px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 
-header h1{font-size:20px;letter-spacing:-.03em;margin:0} .details{margin-top:25px}
+.details{margin-top:25px}
 
 .slider-ticks{display:flex;justify-content:space-between;margin:0 8px 8px}.slider-ticks span{width:1px;height:6px;background:#8b93a3}.slider-ticks span:nth-child(11){height:10px;background:#c0b3eb}
 
@@ -114,3 +112,5 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border:3px solid #f0f
 #tab-status{left:0;border-left:0;border-radius:10px 0 0 10px;transform:translateY(-50%) rotate(180deg);border-right:0;border-left:1px solid #303645}
 #tab-session{right:0;border-right:0;border-radius:10px 0 0 10px}
 .tab:hover,.tab.active,.tab[aria-expanded=true]{background:#34404c;border-color:#52606d;color:#f0f2f5}
+
+main{padding-top:16px}.card-identity{display:flex;align-items:center;gap:10px;min-width:0}.card-identity .connection{white-space:nowrap}

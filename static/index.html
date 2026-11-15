@@ -9,11 +9,10 @@
   <script src="/app.js" defer></script>
 </head>
 <body><main>
-<header><h1>Bed temperature</h1><span id="connection" class="connection" role="status">Connecting</span></header>
 <div class="stage">
 <div class="tabs"><button id="tab-status" class="tab" aria-expanded="false" aria-controls="drawer-status">‹ Pod status</button><button id="tab-session" class="tab" aria-expanded="false" aria-controls="drawer-session">Session ›</button></div>
 <section id="control" class="card" aria-label="Bed temperature controls">
-<div class="card-top"><h2 id="pod-name">Pod</h2><button id="power" class="power" aria-pressed="false">Power</button></div>
+<div class="card-top"><div class="card-identity"><h2 id="pod-name">Pod</h2><span id="connection" class="connection" role="status">Connecting</span></div><button id="power" class="power" aria-pressed="false">Power</button></div>
 <div id="sides" class="sides" aria-label="Bed side"></div>
 <div class="readout" id="target-circle"><strong id="value">—</strong><span id="estimate" class="estimate" aria-label="Estimated target temperature">—</span></div>
 <label for="slider" class="sr-only">Target heating level</label><div class="slider-wrap"><input id="slider" type="range" min="-10" max="10" step="1" value="0" aria-describedby="current-level-help"><span id="current-marker" class="current-marker" hidden aria-hidden="true"></span></div><span id="current-level-help" class="sr-only">The separate marker shows the reported current device level.</span><div class="slider-ticks" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="range-labels"><span>−10</span><span>0</span><span>+10</span></div>
