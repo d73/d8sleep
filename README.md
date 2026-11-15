@@ -22,12 +22,12 @@ The web control and CLI use the app-style -10 to +10 scale; each step maps to 10
 From a Windows command prompt in this folder (or use the full path to `pod.bat`), for example:
 
 ```bat
-pod.bat --side left on
-pod.bat --side left set -5
-pod.bat --side left off
+pod.bat left on
+pod.bat left set -5
+pod.bat left off
 ```
 
-Use `right` or `solo` for the corresponding side. `--side` may be omitted only when the account has one assigned side. `set` accepts whole numbers from -10 to +10 and changes the target level; use `on` separately to turn on an off side. The CLI connects directly using the same `.env` credentials, works without the web app, and returns a nonzero exit code on failure. For other systems, use `python pod.py` with the same arguments.
+Use `right` or `solo` for the corresponding side. The side is the first argument and may be omitted only when the account has one assigned side. Grammar: `pod [left|right|solo] on | off | set LEVEL`. `set` accepts whole numbers from -10 to +10 and changes the target level; use `on` separately to turn on an off side. The CLI connects directly using the same `.env` credentials, works without the web app, and returns a nonzero exit code on failure. For other systems, use `python pod.py` with the same arguments.
 
 ## Test
 

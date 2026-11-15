@@ -26,19 +26,25 @@ class CliTests(unittest.TestCase):
         self.errors.__exit__(None,None,None); self.output.__exit__(None,None,None)
         self.factory.stop(); self.env.stop()
     def test_set_maps_scale_and_side(self):
-        self.assertEqual(pod.main(['--side','left','set','-5']),0)
+        self.assertEqual(pod.main(['left','set','-5']),0)
         self.assertEqual(self.client.calls,[('level','left',-50)])
     def test_on_and_off(self):
-        self.assertEqual(pod.main(['--side','right','on']),0)
-        self.assertEqual(pod.main(['--side','left','off']),0)
+        self.assertEqual(pod.main(['right','on']),0)
+        self.assertEqual(pod.main(['left','off']),0)
         self.assertEqual(self.client.calls,[('power','right',True),('power','left',False)])
     def test_bounds_and_missing_side_do_not_write(self):
-        with self.assertRaises(SystemExit): pod.main(['--side','left','set','11'])
+        with self.assertRaises(SystemExit): pod.main(['left','set','11'])
         self.assertEqual(pod.main(['set','0']),1)
-        self.assertEqual(pod.main(['--side','solo','off']),1)
+        self.assertEqual(pod.main(['solo','off']),1)
         self.assertEqual(self.client.calls,[])
+    def test_consistent_positional_grammar(self):
+        for bad in (['left'], ['left','on','3'], ['left','set'], ['left','set','1','2'], ['left','hot'], ['--side','left','on']):
+            with self.assertRaises(SystemExit): pod.main(bad)
+        self.assertEqual(self.client.calls,[])
+        self.assertEqual(pod.main(['left','set','+3']),0)
+        self.assertEqual(self.client.calls,[('level','left',30)])
     def test_api_errors_return_nonzero(self):
         self.client.set_power = lambda *_: (_ for _ in ()).throw(ApiError('unavailable'))
-        self.assertEqual(pod.main(['--side','left','off']),1)
+        self.assertEqual(pod.main(['left','off']),1)
 
 if __name__ == '__main__': unittest.main()
