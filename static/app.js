@@ -41,21 +41,30 @@ const HELP={
   'Session state':"Incomplete means the session isn't finished or fully processed, so numbers may still change.",
   'Heart rate':"Latest heart rate sample from the session. It may be delayed.",
   'HRV':"Heart rate variability from the latest session sample. Early readings can be noisy.",
-  'Respiratory rate':"Breaths per minute from the latest session sample.",
+  'Resp rate':"Breaths per minute from the latest session sample.",
   'Bed temperature':"Temperature at the bed surface from the latest session sample (delayed).",
   'Room temperature':"Room temperature near the Pod from the latest session sample (delayed)."
 };
-const openHelp=new Set();
+let helpOpener=null;
+function closeHelp(){
+  $('help-overlay').hidden=true;
+  if(helpOpener?.isConnected)helpOpener.focus();
+  else {const drawer=document.querySelector('.drawer.open');if(drawer)$(drawer.id==='drawer-status'?'tab-status':'tab-session').focus();}
+  helpOpener=null;
+}
+function showHelp(name,button){
+  helpOpener=button;$('help-title').textContent=name;$('help-message').textContent=HELP[name];
+  $('help-overlay').hidden=false;$('help-close').focus();
+}
 function helpFor(box,name){
   const text=HELP[name];if(!text)return;
   box.title=text;box.classList.add('has-help');
-  const button=document.createElement('button'),tip=document.createElement('span');
-  button.type='button';button.className='help-button';button.textContent='?';button.setAttribute('aria-label',`About ${name}`);
-  tip.className='help-text';tip.textContent=text;tip.hidden=!openHelp.has(name);
-  button.setAttribute('aria-expanded',String(!tip.hidden));
-  button.onclick=()=>{tip.hidden=!tip.hidden;button.setAttribute('aria-expanded',String(!tip.hidden));if(tip.hidden)openHelp.delete(name);else openHelp.add(name);};
-  box.append(button,tip);
+  const button=document.createElement('button');button.type='button';button.className='help-button';button.textContent='?';
+  button.setAttribute('aria-label',`About ${name}`);button.setAttribute('aria-haspopup','dialog');
+  button.onclick=()=>showHelp(name,button);box.append(button);
 }
+$('help-close').onclick=closeHelp;
+$('help-overlay').onclick=event=>{if(event.target===$('help-overlay'))closeHelp();};
 function tile(name,value,stamp,withDot=false){
   const box=document.createElement('div'),label=document.createElement('span'),text=document.createElement('strong');
   box.className='metric-tile';label.className='metric-label';label.textContent=name;text.textContent=value??'—';box.append(label,text);
@@ -102,10 +111,10 @@ function renderSession(){
   meta.append(tile('Session start',when(sessionData.start)));
   meta.append(choiceTile('Session state',[[false,'Complete'],[true,'Incomplete'],[null,'Not reported']],sessionData.incomplete));
   if(sessionData.presence_end)meta.append(tile('Presence end',when(sessionData.presence_end)));
-  const specs=[['heartRate','Heart rate',' bpm'],['hrv','HRV',' ms'],['tempBedC','Bed temperature',''],['tempRoomC','Room temperature',''],['respiratoryRate','Respiratory rate',' breaths/min']];
+  const specs=[['heartRate','Heart rate',' bpm'],['hrv','HRV',' ms'],['tempBedC','Bed temperature',''],['tempRoomC','Room temperature',''],['respiratoryRate','Resp rate',' breaths/min']];
   for(const [key,label,suffix] of specs){
     const sample=sessionData.metrics?.[key];let value='Not available';
-    if(sample&&Number.isFinite(sample.value)){if(key==='tempBedC'||key==='tempRoomC'){const n=unit==='F'?sample.value*9/5+32:sample.value;value=`${n.toFixed(1)}°${unit}`;}else value=`${sample.value}${suffix}`;}
+    if(sample&&Number.isFinite(sample.value)){if(key==='tempBedC'||key==='tempRoomC'){const n=unit==='F'?sample.value*9/5+32:sample.value;value=`${Math.round(n)}°${unit}`;}else value=`${Math.round(sample.value)}${suffix}`;}
     const card=tile(label,value,sample?.timestamp);(key==='respiratoryRate'?resp:grid).append(card);
   }
 }
@@ -177,5 +186,5 @@ function toggleDrawer(id){const d=$(id);for(const other of document.querySelecto
 $('tab-status').onclick=()=>toggleDrawer('drawer-status');$('tab-session').onclick=()=>toggleDrawer('drawer-session');
 for(const b of document.querySelectorAll('[data-close]'))b.onclick=()=>setDrawer(b.dataset.close,false);
 $('drawer-backdrop').onclick=()=>{for(const d of document.querySelectorAll('.drawer.open'))setDrawer(d.id,false);};
-document.addEventListener('keydown',e=>{if(e.key==='Escape')for(const d of document.querySelectorAll('.drawer.open'))setDrawer(d.id,false);});
+document.addEventListener('keydown',e=>{if(!$('help-overlay').hidden){if(e.key==='Escape'){e.preventDefault();closeHelp();}else if(e.key==='Tab'){e.preventDefault();$('help-close').focus();}return;}if(e.key==='Escape')for(const d of document.querySelectorAll('.drawer.open'))setDrawer(d.id,false);});
 for(const d of document.querySelectorAll('.drawer'))d.setAttribute('aria-hidden','true');
