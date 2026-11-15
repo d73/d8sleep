@@ -16,30 +16,40 @@ function renderLive(){
   const grid=$('live-status'), d=deviceData, side=sides.find(s=>s.side===selected);
   grid.replaceChildren();
   const row=(name,value)=>{const box=document.createElement('div'), label=document.createElement('span'), text=document.createElement('strong');label.textContent=name;text.textContent=value??'—';box.append(label,text);grid.append(box);};
-  const yesNo=(value,yes='Yes',no='No')=>typeof value==='boolean'?(value?yes:no):'—';
+  // Enumerated values: show every option, highlight the current one, dim the rest. An unlisted current value is appended so it is never hidden.
+  const choice=(name,options,current)=>{
+    const box=document.createElement('div'), label=document.createElement('span'), chips=document.createElement('div');
+    label.textContent=name; chips.className='choices';
+    const list=options.slice();
+    if(current!==null&&current!==undefined&&!list.some(o=>o[0]===current))list.push([current,String(current)]);
+    for(const [value,text] of list){const chip=document.createElement('em');chip.textContent=text;if(value===current){chip.className='on';chip.setAttribute('aria-current','true');}chips.append(chip);}
+    box.append(label,chips);grid.append(box);
+  };
+  const bool=(name,current,yes='Yes',no='No')=>choice(name,[[true,yes],[false,no]],typeof current==='boolean'?current:null);
+  const modes=[['off','Off'],['smart:bedtime','Bedtime'],['smart:initial','Early sleep'],['smart:final','Late sleep']];
   const when=value=>{if(!value)return '—';const date=new Date(value);return Number.isNaN(date.getTime())?'—':date.toLocaleString();};
   const level=value=>Number.isInteger(value)?displayLevel(value):'—';
   if(d){
-    row('Connection',yesNo(d.online,'Online','Offline'));
-    row('Water',yesNo(d.hasWater,'Present','Low / absent'));
-    row('Priming',yesNo(d.priming,'In progress','Not running'));
-    row('Needs priming',yesNo(d.needsPriming));
-    row('Temperature available',yesNo(d.isTemperatureAvailable));
+    bool('Connection',d.online,'Online','Offline');
+    bool('Water',d.hasWater,'Present','Low / absent');
+    bool('Priming',d.priming,'In progress','Not running');
+    bool('Needs priming',d.needsPriming);
+    bool('Temperature available',d.isTemperatureAvailable);
     row('Last heard',when(d.lastHeard));
     row('Last primed',when(d.lastPrime));
     row('Firmware',d.firmwareVersion||'—');
-    row('Firmware updating',yesNo(d.firmwareUpdating));
+    bool('Firmware updating',d.firmwareUpdating);
   }
   if(side){
-    row('Selected side',side.side.charAt(0).toUpperCase()+side.side.slice(1));
-    row('Side power',yesNo(side.power,'On','Off'));
-    row('Active mode',side.mode||'—');
+    choice('Selected side',[['left','Left'],['right','Right'],['solo','Solo']],side.side);
+    bool('Side power',side.power,'On','Off');
+    choice('Active mode',modes,side.mode||null);
     row('Mode started',when(side.mode_started));
     row('Target level',level(side.target));
     row('Current device level',side.power===false?'—':level(side.current));
     const running=side.side==='left'?d?.leftNowHeating:side.side==='right'?d?.rightNowHeating:null;
-    row('Temperature running',yesNo(running));
-    row('Schedule type',side.schedule_type||'—');
+    bool('Temperature running',running);
+    choice('Schedule type',[['smart','Smart'],['timeBased','Timed']],side.schedule_type||null);
     row('Bedtime level',level(side.smart?.bedTimeLevel));
     row('Early sleep level',level(side.smart?.initialSleepLevel));
     row('Late sleep level',level(side.smart?.finalSleepLevel));
