@@ -86,7 +86,7 @@ class ClientTests(unittest.TestCase):
                     {'ts': '2026-01-01T00:00:00Z', 'timeseries': {}},
                     {'ts': '2026-01-02T00:00:00Z', 'presenceEnd': '2026-01-02T02:00:00Z',
                      'incomplete': True, 'device': {'id': 'secret-device'}, 'id': 'secret-session',
-                     'timeseries': {'heartRate': [['2026-01-02T01:20:00Z', 60], ['2026-01-02T01:00:00Z', 55]],
+                     'timeseries': {'heartRate': [['2026-01-02T01:20:00Z', 60], ['bad-date', 70], ['2026-01-02T01:10:00Z', True], ['2026-01-02T01:00:00Z', 55]],
                                     'hrv': [['bad-date', 1]], 'tempBedC': [['2026-01-02T01:00:00Z', 25.5]]}}
                 ]}
             return original(method, url, payload, token)
@@ -94,6 +94,7 @@ class ClientTests(unittest.TestCase):
         result = self.client.session_biometrics('left')
         self.assertEqual(result['start'], '2026-01-02T00:00:00Z')
         self.assertEqual(result['metrics']['heartRate']['value'], 60)
+        self.assertEqual(result['heart_rate_series'], [{'timestamp':'2026-01-02T01:00:00Z','value':55}, {'timestamp':'2026-01-02T01:20:00Z','value':60}])
         self.assertEqual(result['metrics']['tempBedC']['value'], 25.5)
         self.assertIsNone(result['metrics']['hrv'])
         self.assertIsNone(result['metrics']['tempRoomC'])
@@ -151,7 +152,7 @@ class ServerTests(unittest.TestCase):
         fake=FakeTransport()
         def transport(method,url,payload,token):
             if url.endswith('/intervals'):
-                return {'intervals': [{'ts':'2026-01-02T00:00:00Z','id':'private','timeseries':{'hrv':[['2026-01-02T01:00:00Z',42]]}}]}
+                return {'intervals': [{'ts':'2026-01-02T00:00:00Z','id':'private','timeseries':{'hrv':[['2026-01-02T01:00:00Z',42]], 'heartRate':[['2026-01-02T01:02:00Z', 70], ['2026-01-02T01:00:00Z', 68]]}}]}
             return fake(method,url,payload,token)
         server.client=EightClient('a', 'b', transport)
         conn=HTTPConnection('127.0.0.1', self.httpd.server_port)
@@ -160,6 +161,7 @@ class ServerTests(unittest.TestCase):
             res=conn.getresponse(); data=json.loads(res.read())
             self.assertEqual(res.status, 200)
             self.assertEqual(data['session']['metrics']['hrv']['value'],42)
+            self.assertEqual([p['value'] for p in data['session']['heart_rate_series']], [68,70])
             self.assertNotIn('private', json.dumps(data))
             conn.request('GET', '/api/session?side=invalid')
             res=conn.getresponse();res.read();self.assertEqual(res.status,400)

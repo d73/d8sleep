@@ -64,6 +64,29 @@ function renderSession(){
   const respiratory=session?.metrics?.respiratoryRate;stat('Resp rate',sampleText(respiratory,'respiratoryRate',' breaths/min'),respiratory?.timestamp);
   stat('Session start',when(session?.start));stat('Presence end',when(session?.presence_end));
   const stateBox=document.createElement('div'),stateLabel=document.createElement('span');stateBox.className='session-state-line';stateLabel.textContent='Session state';const stateChoices=choiceList([[false,'Complete'],[true,'Incomplete'],[null,'Not reported']],session?.incomplete??null);stateChoices.setAttribute('role','group');stateChoices.setAttribute('aria-label','Session states');stateBox.append(stateLabel,stateChoices);details.append(stateBox);
+  renderHeartChart(session?.heart_rate_series);
+}
+function renderHeartChart(samples){
+  const container=$('heart-chart-content');container.replaceChildren();
+  const points=(Array.isArray(samples)?samples:[]).filter(p=>p&&typeof p.value==='number'&&Number.isFinite(p.value)&&typeof p.timestamp==='string'&&Number.isFinite(Date.parse(p.timestamp))).map(p=>({time:Date.parse(p.timestamp),value:p.value})).sort((a,b)=>a.time-b.time);
+  if(!points.length){const empty=document.createElement('p');empty.className='heart-chart-empty';empty.textContent='No heart-rate samples available for this session.';container.append(empty);return;}
+  const ns='http://www.w3.org/2000/svg', svg=document.createElementNS(ns,'svg');
+  const node=(name,attrs)=>{const e=document.createElementNS(ns,name);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));return e;};
+  let min=Infinity,max=-Infinity;for(const p of points){min=Math.min(min,p.value);max=Math.max(max,p.value);}
+  const low=Math.floor((min-5)/10)*10, high=Math.ceil((max+5)/10)*10;
+  const first=points[0].time,last=points[points.length-1].time, x=time=>first===last?173:36+(time-first)/(last-first)*274, y=value=>140-(value-low)/(high-low)*128;
+  svg.setAttribute('viewBox','0 0 320 160');svg.setAttribute('role','img');svg.setAttribute('aria-label',`Heart rate chart, ${points.length} ${points.length===1?'sample':'samples'}, range ${Math.round(min)} to ${Math.round(max)} beats per minute, from ${new Date(first).toLocaleString()} to ${new Date(last).toLocaleString()}.`);
+  for(const value of [low,(low+high)/2,high]){const yy=y(value),line=node('line',{x1:36,x2:310,y1:yy,y2:yy,class:'chart-grid-line'}),label=node('text',{x:30,y:yy+3,'text-anchor':'end',class:'chart-axis-label'});label.textContent=String(Math.round(value));svg.append(line,label);}
+  let path='',gaps=false;
+  for(let i=0;i<points.length;i++){const p=points[i],separate=i===0||p.time-points[i-1].time>30*60*1000;if(i>0&&separate)gaps=true;path+=`${separate?'M':'L'}${x(p.time).toFixed(2)} ${y(p.value).toFixed(2)} `;}
+  svg.append(node('path',{d:path,class:'chart-line'}));
+  const stride=Math.max(1,Math.ceil(points.length/150));for(let i=0;i<points.length;i++){if(i%stride===0||i===points.length-1)svg.append(node('circle',{cx:x(points[i].time),cy:y(points[i].value),r:2.7,class:'chart-point'}));}
+  container.append(svg);
+  const range=document.createElement('div');range.className='heart-chart-range';
+  const format=time=>new Date(time).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+  const start=document.createElement('span');start.textContent=format(first);range.append(start);
+  if(last!==first){const end=document.createElement('span');end.textContent=format(last);range.append(end);}container.append(range);
+  if(gaps){const note=document.createElement('p');note.className='heart-chart-note';note.textContent='Gaps over 30 minutes are not connected.';container.append(note);}
 }
 async function pollSession(){
   if(document.hidden||!selected||busy||dragging||sessionInFlight===selected)return;
