@@ -45,26 +45,59 @@ const HELP={
   'Bed temperature':"Temperature at the bed surface from the latest session sample (delayed).",
   'Room temperature':"Room temperature near the Pod from the latest session sample (delayed)."
 };
-let helpOpener=null;
+let activeHelp=null, helpCloseTimer=null;
+function cancelHelpClose(){if(helpCloseTimer!==null){clearTimeout(helpCloseTimer);helpCloseTimer=null;}}
 function closeHelp(){
-  $('help-overlay').hidden=true;
-  if(helpOpener?.isConnected)helpOpener.focus();
-  else {const drawer=document.querySelector('.drawer.open');if(drawer)$(drawer.id==='drawer-status'?'tab-status':'tab-session').focus();}
-  helpOpener=null;
+  cancelHelpClose();if(activeHelp?.button)activeHelp.button.removeAttribute('aria-describedby');
+  $('help-popover').hidden=true;activeHelp=null;
 }
-function showHelp(name,button){
-  helpOpener=button;$('help-title').textContent=name;$('help-message').textContent=HELP[name];
-  $('help-overlay').hidden=false;$('help-close').focus();
+function positionHelp(){
+  if(!activeHelp)return;
+  const button=activeHelp.button, pop=$('help-popover');
+  if(!button.isConnected){closeHelp();return;}
+  const rect=button.getBoundingClientRect(), margin=8, gap=6;
+  const viewWidth=document.documentElement?.clientWidth||window.innerWidth, viewHeight=document.documentElement?.clientHeight||window.innerHeight;
+  const panel=button.closest('.drawer'), panelRect=panel?.getBoundingClientRect();
+  if(!rect.width||!rect.height||rect.bottom<0||rect.top>viewHeight||rect.right<0||rect.left>viewWidth||
+     (panelRect&&(rect.bottom<=panelRect.top||rect.top>=panelRect.bottom))){closeHelp();return;}
+  const width=pop.offsetWidth, height=pop.offsetHeight;
+  const left=Math.max(margin,Math.min(rect.left+rect.width/2-width/2,viewWidth-width-margin));
+  const desiredTop=rect.top-height-gap>=margin?rect.top-height-gap:rect.bottom+gap;
+  pop.style.left=`${left}px`;pop.style.top=`${Math.max(margin,Math.min(desiredTop,viewHeight-height-margin))}px`;
+}
+function showHelp(name,button,pinned=false){
+  cancelHelpClose();
+  if(activeHelp?.button!==button){if(activeHelp?.button)activeHelp.button.removeAttribute('aria-describedby');
+    activeHelp={name,button,pinned,drawer:button.closest('.drawer')?.id,details:!!button.closest('.technical-details')};
+  }else if(pinned)activeHelp.pinned=true;
+  $('help-popover').textContent=HELP[name];$('help-popover').hidden=false;
+  button.setAttribute('aria-describedby','help-popover');positionHelp();
+}
+function scheduleHelpClose(){cancelHelpClose();helpCloseTimer=setTimeout(()=>{helpCloseTimer=null;if(activeHelp&&!activeHelp.pinned)closeHelp();},180);}
+function reanchorHelp(drawerId){
+  if(!activeHelp||activeHelp.drawer!==drawerId)return;
+  const panel=$(drawerId),old=activeHelp.button;
+  const next=Array.from(panel.querySelectorAll('.help-button')).find(b=>b.dataset.help===activeHelp.name&&!!b.closest('.technical-details')===activeHelp.details);
+  if(!next){closeHelp();return;}
+  old.removeAttribute('aria-describedby');activeHelp.button=next;next.setAttribute('aria-describedby','help-popover');positionHelp();
 }
 function helpFor(box,name){
   const text=HELP[name];if(!text)return;
-  box.title=text;box.classList.add('has-help');
-  const button=document.createElement('button');button.type='button';button.className='help-button';button.textContent='?';
-  button.setAttribute('aria-label',`About ${name}`);button.setAttribute('aria-haspopup','dialog');
-  button.onclick=()=>showHelp(name,button);box.append(button);
+  box.classList.add('has-help');
+  const button=document.createElement('button');button.type='button';button.className='help-button';button.textContent='?';button.dataset.help=name;
+  button.setAttribute('aria-label',`About ${name}`);
+  button.addEventListener('mouseenter',()=>{if(window.matchMedia('(hover: hover) and (pointer: fine)').matches)showHelp(name,button);});
+  button.addEventListener('mouseleave',()=>{if(window.matchMedia('(hover: hover) and (pointer: fine)').matches)scheduleHelpClose();});
+  button.addEventListener('focus',()=>showHelp(name,button));
+  button.addEventListener('blur',()=>scheduleHelpClose());
+  button.onclick=()=>{if(activeHelp?.button===button&&activeHelp.pinned)closeHelp();else showHelp(name,button,true);};
+  box.append(button);
 }
-$('help-close').onclick=closeHelp;
-$('help-overlay').onclick=event=>{if(event.target===$('help-overlay'))closeHelp();};
+$('help-popover').addEventListener('mouseenter',cancelHelpClose);
+$('help-popover').addEventListener('mouseleave',scheduleHelpClose);
+document.addEventListener('pointerdown',event=>{if(activeHelp&&!activeHelp.button.contains(event.target)&&!$('help-popover').contains(event.target))closeHelp();});
+window.addEventListener('resize',positionHelp);
+window.addEventListener('scroll',positionHelp,true);
 function tile(name,value,stamp,withDot=false){
   const box=document.createElement('div'),label=document.createElement('span'),text=document.createElement('strong');
   box.className='metric-tile';label.className='metric-label';label.textContent=name;text.textContent=value??'—';box.append(label,text);
@@ -103,11 +136,12 @@ function renderLive(){
     details.append(tile('Mode started',when(side.mode_started)),tile('Target level',level(side.target)),tile('Current device level',side.power===false?'—':level(side.current)),bool('Temperature running',running));
     details.append(tile('Bedtime level',level(side.smart?.bedTimeLevel)),tile('Early sleep level',level(side.smart?.initialSleepLevel)),tile('Late sleep level',level(side.smart?.finalSleepLevel)),tile('Timed level',level(side.timed?.level)),tile('Timed duration (configured)',Number.isFinite(side.timed?.durationSeconds)?`${side.timed.durationSeconds} seconds`:'—'));
   }
+  reanchorHelp('drawer-status');
 }
 let sessionRequest=0, sessionInFlight=null;
 function renderSession(){
   const grid=$('session-status'),meta=$('session-meta'),resp=$('session-respiratory');grid.replaceChildren();meta.replaceChildren();resp.replaceChildren();
-  if(!sessionData||sessionSide!==selected){const msg=document.createElement('p');msg.textContent='No session data available yet.';grid.append(msg);return;}
+  if(!sessionData||sessionSide!==selected){const msg=document.createElement('p');msg.textContent='No session data available yet.';grid.append(msg);reanchorHelp('drawer-session');return;}
   meta.append(tile('Session start',when(sessionData.start)));
   meta.append(choiceTile('Session state',[[false,'Complete'],[true,'Incomplete'],[null,'Not reported']],sessionData.incomplete));
   if(sessionData.presence_end)meta.append(tile('Presence end',when(sessionData.presence_end)));
@@ -117,6 +151,7 @@ function renderSession(){
     if(sample&&Number.isFinite(sample.value)){if(key==='tempBedC'||key==='tempRoomC'){const n=unit==='F'?sample.value*9/5+32:sample.value;value=`${Math.round(n)}°${unit}`;}else value=`${Math.round(sample.value)}${suffix}`;}
     const card=tile(label,value,sample?.timestamp);(key==='respiratoryRate'?resp:grid).append(card);
   }
+  reanchorHelp('drawer-session');
 }
 async function pollSession(){
   if(document.hidden||!selected||busy||dragging||sessionInFlight===selected)return;
@@ -135,8 +170,7 @@ async function pollDevice(){
   catch(e){$('live-error').textContent=`Device status: ${e.message}`;}
   finally{devicePolling=false;}
 }
-setInterval(pollDevice,30000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)void pollDevice();});
+// Device diagnostics refresh when the panel opens, rather than on a timer.
 void pollDevice();
 function update(data){if(data.pod_name)$('pod-name').textContent=data.pod_name;const previous=selected;sides=data.sides;if(!sides.some(s=>s.side===selected))selected=sides[0]?.side;if(selected!==previous){sessionRequest++;sessionInFlight=null;sessionData=null;sessionSide=null;void pollSession();}render();say('',true);}
 async function refresh(){try{update(await api('/api/status'));}catch(e){say(e.message);}}
@@ -181,10 +215,10 @@ async function sendLevels(){
 $('slider').oninput=()=>{dragging=true;colorSlider(Number($('slider').value));$('value').textContent=displayLevel(Number($('slider').value)*10);$('estimate').textContent=`~${degrees(Number($('slider').value)*10)}`;};$('slider').onchange=()=>{dragging=false;level(Number($('slider').value));};
 for(const event of ['pointerup','pointercancel','touchend','touchcancel','keyup'])$('slider').addEventListener(event,()=>setTimeout(()=>{if(dragging){dragging=false;render();}},0));$('power').onclick=()=>change('/api/power',{side:selected,on:!sides.find(s=>s.side===selected).power});$('unit-f').onclick=()=>selectUnit('F');$('unit-c').onclick=()=>selectUnit('C');refresh();
 // Drawers: Pod status slides out left of the control, session biometrics right. Escape, backdrop or × closes.
-function setDrawer(id,open){const d=$(id);d.classList.toggle('open',open);d.setAttribute('aria-hidden',String(!open));const tab=id==='drawer-status'?$('tab-status'):$('tab-session');tab.setAttribute('aria-expanded',String(open));tab.classList.toggle('active',open);const any=document.querySelector('.drawer.open');$('drawer-backdrop').hidden=!any;if(open&&id==='drawer-status')void pollDevice();}
+function setDrawer(id,open){if(!open&&activeHelp?.drawer===id)closeHelp();const d=$(id);d.classList.toggle('open',open);d.setAttribute('aria-hidden',String(!open));const tab=id==='drawer-status'?$('tab-status'):$('tab-session');tab.setAttribute('aria-expanded',String(open));tab.classList.toggle('active',open);const any=document.querySelector('.drawer.open');$('drawer-backdrop').hidden=!any;if(open&&id==='drawer-status')void pollDevice();}
 function toggleDrawer(id){const d=$(id);for(const other of document.querySelectorAll('.drawer'))if(other!==d&&other.classList.contains('open')&&window.matchMedia('(max-width:1199px)').matches)setDrawer(other.id,false);setDrawer(id,!d.classList.contains('open'));}
 $('tab-status').onclick=()=>toggleDrawer('drawer-status');$('tab-session').onclick=()=>toggleDrawer('drawer-session');
 for(const b of document.querySelectorAll('[data-close]'))b.onclick=()=>setDrawer(b.dataset.close,false);
 $('drawer-backdrop').onclick=()=>{for(const d of document.querySelectorAll('.drawer.open'))setDrawer(d.id,false);};
-document.addEventListener('keydown',e=>{if(!$('help-overlay').hidden){if(e.key==='Escape'){e.preventDefault();closeHelp();}else if(e.key==='Tab'){e.preventDefault();$('help-close').focus();}return;}if(e.key==='Escape')for(const d of document.querySelectorAll('.drawer.open'))setDrawer(d.id,false);});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&activeHelp){e.preventDefault();closeHelp();return;}if(e.key==='Escape')for(const d of document.querySelectorAll('.drawer.open'))setDrawer(d.id,false);});
 for(const d of document.querySelectorAll('.drawer'))d.setAttribute('aria-hidden','true');
