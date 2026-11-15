@@ -11,9 +11,9 @@
 <body><main>
 <header><h1>Bed temperature</h1><span id="connection" class="connection" role="status">Connecting</span></header>
 <section id="control" class="card" aria-label="Bed temperature controls">
-<div class="card-top"><h2>Temperature</h2><button id="power" class="power" aria-pressed="false">Power</button></div>
+<div class="card-top"><h2 id="pod-name">Pod</h2><button id="power" class="power" aria-pressed="false">Power</button></div>
 <div id="sides" class="sides" aria-label="Bed side"></div>
 <div class="readout"><span class="readout-label">TARGET LEVEL</span><div><strong id="value">—</strong></div><span id="estimate" class="estimate">Estimated target —</span></div>
 <label for="slider" class="sr-only">Target heating level</label><input id="slider" type="range" min="-10" max="10" step="1" value="0"><div class="slider-ticks" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="range-labels"><span>−10</span><span>0</span><span>+10</span></div>
-<div class="details"><span>Currently at <strong id="current">—</strong></span><button id="units" class="unit">°F / °C</button></div>
+<div class="details"><span>Currently at <strong id="current">—</strong></span><div class="unit-switch" role="group" aria-label="Temperature unit"><button id="unit-f" class="unit" aria-pressed="true">°F</button><button id="unit-c" class="unit" aria-pressed="false">°C</button></div></div>
 </section><p id="message" class="message" role="status" aria-live="polite"></p></main></body></html>

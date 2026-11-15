@@ -64,7 +64,7 @@ class Handler(BaseHTTPRequestHandler):
                 if client is None:
                     return self.send(401, {'error': 'Set EIGHT_EMAIL and EIGHT_PASSWORD in .env and restart d8sleep.'})
                 try:
-                    return self.send(200, {'sides': client.status()})
+                    return self.send(200, {'sides': client.status(), 'pod_name': client.pod_name})
                 except ApiError as exc:
                     return self.send(502, {'error': str(exc)})
         self.send(404, {'error': 'Not found.'})
@@ -91,7 +91,7 @@ class Handler(BaseHTTPRequestHandler):
                     client.set_power(data.get('side'), data.get('on'))
                 else:
                     return self.send(404, {'error': 'Not found.'})
-                return self.send(200, {'sides': client.status()})
+                return self.send(200, {'sides': client.status(), 'pod_name': client.pod_name})
         except (ValueError, json.JSONDecodeError) as exc:
             return self.send(400, {'error': str(exc)})
         except ApiError as exc:

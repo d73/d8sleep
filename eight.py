@@ -18,6 +18,7 @@ class EightClient:
         self.email, self.password = email, password
         self.transport = transport or self._http
         self.token, self.expires, self.sides = None, 0, {}
+        self.pod_name = 'Pod'
 
     @staticmethod
     def _http(method, url, payload=None, token=None):
@@ -59,7 +60,8 @@ class EightClient:
             devices = self.call('GET', CLIENT + '/users/me')['user']['devices']
             if not devices:
                 raise ApiError('No Eight Sleep device found on this account.')
-            device = self.call('GET', CLIENT + '/devices/' + parse.quote(str(devices[0]), safe='') + '?filter=leftUserId,rightUserId,awaySides')['result']
+            device = self.call('GET', CLIENT + '/devices/' + parse.quote(str(devices[0]), safe='') + '?filter=leftUserId,rightUserId,awaySides,modelString')['result']
+            self.pod_name = device.get('modelString') or 'Pod'
             ids = {device.get('leftUserId'): 'left', device.get('rightUserId'): 'right'}
             for side, uid in (device.get('awaySides') or {}).items():
                 label = {'leftuserid': 'left', 'rightuserid': 'right', 'left': 'left', 'right': 'right', 'solo': 'solo'}.get(side.lower())

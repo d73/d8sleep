@@ -13,7 +13,7 @@ class FakeTransport:
         self.calls.append((method, url, payload, token))
         if '/tokens' in url: return {'access_token':'test-token','expires_in':3600}
         if url.endswith('/users/me'): return {'user':{'devices':['device']}}
-        if '/devices/' in url: return {'result':{'leftUserId':'left-id','rightUserId':'right-id'}}
+        if '/devices/' in url: return {'result':{'leftUserId':'left-id','rightUserId':'right-id','modelString':'Pod 4'}}
         if method == 'GET' and '/temperature' in url: return {'currentState':{'type':'smart'},'currentLevel':-20,'currentDeviceLevel':-15}
         return {}
 
@@ -24,6 +24,7 @@ class ClientTests(unittest.TestCase):
     def test_discovery_status_and_authenticated_requests(self):
         sides = self.client.status()
         self.assertEqual({s['side'] for s in sides}, {'left', 'right'})
+        self.assertEqual(self.client.pod_name, 'Pod 4')
         self.assertEqual(sides[0]['target'], -20)
         self.assertEqual(sides[0]['current'], -15)
         self.assertTrue(all(call[3] == 'test-token' for call in self.fake.calls[1:]))
