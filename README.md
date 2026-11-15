@@ -15,7 +15,19 @@ On Windows, run `start.bat` from this folder to start the app in the background;
 
 Account credentials and tokens remain on the server and are never sent to phone browsers. The app uses HTTP and permits anyone on the trusted home network who can reach it to control the Pod; do not expose its port to the internet or use it on an untrusted network. `.env` is ignored by Git. Credentials in `.env` remain on disk.
 
-The API reports device and target **levels**, not a verified thermometer reading. The degree estimate uses a community mapping and may not match the actual bed temperature. The app does not change alarm, base, or sleep-stage settings. Dual-side control depends on which user IDs the account can access.
+The web control and CLI use the app-style -10 to +10 scale; each step maps to 10 units on the unofficial API scale (-100 to +100). Non-integer readings are displayed without rounding away the reported value. The API reports device and target **levels**, not a verified thermometer reading. The degree estimate uses a community mapping and may not match the actual bed temperature. The app does not change alarm, base, or sleep-stage settings. Dual-side control depends on which user IDs the account can access.
+
+## Command line
+
+From a Windows command prompt in this folder (or use the full path to `pod.bat`), for example:
+
+```bat
+pod.bat --side left on
+pod.bat --side left set -5
+pod.bat --side left off
+```
+
+Use `right` or `solo` for the corresponding side. `--side` may be omitted only when the account has one assigned side. `set` accepts whole numbers from -10 to +10 and changes the target level; use `on` separately to turn on an off side. The CLI connects directly using the same `.env` credentials, works without the web app, and returns a nonzero exit code on failure. For other systems, use `python pod.py` with the same arguments.
 
 ## Test
 
