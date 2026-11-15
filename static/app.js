@@ -63,7 +63,7 @@ function renderSession(){
   const stat=(name,value,stamp)=>{const item=document.createElement('div'),label=document.createElement('span'),text=document.createElement('strong');label.textContent=name;text.textContent=value;item.append(label,text);if(stamp){const time=document.createElement('small');time.textContent=`Sample: ${when(stamp)}`;item.append(time);}details.append(item);};
   const respiratory=session?.metrics?.respiratoryRate;stat('Resp rate',sampleText(respiratory,'respiratoryRate',' breaths/min'),respiratory?.timestamp);
   stat('Session start',when(session?.start));stat('Presence end',when(session?.presence_end));
-  const stateBox=document.createElement('div'),stateLabel=document.createElement('span');stateLabel.textContent='Session state';const stateChoices=choiceList([[false,'Complete'],[true,'Incomplete'],[null,'Not reported']],session?.incomplete??null);stateChoices.setAttribute('role','group');stateChoices.setAttribute('aria-label','Session states');stateBox.append(stateLabel,stateChoices);details.append(stateBox);
+  const stateBox=document.createElement('div'),stateLabel=document.createElement('span');stateBox.className='session-state-line';stateLabel.textContent='Session state';const stateChoices=choiceList([[false,'Complete'],[true,'Incomplete'],[null,'Not reported']],session?.incomplete??null);stateChoices.setAttribute('role','group');stateChoices.setAttribute('aria-label','Session states');stateBox.append(stateLabel,stateChoices);details.append(stateBox);
 }
 async function pollSession(){
   if(document.hidden||!selected||busy||dragging||sessionInFlight===selected)return;
