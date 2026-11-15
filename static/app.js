@@ -27,6 +27,7 @@ const HELP={
   'Active mode':"What this side is doing now. Bedtime, early sleep and late sleep are stages of the smart schedule. The full list of modes isn't documented, so unknown values are added as they appear.",
   'Mode started':"When the current mode began.",
   'Target level':"The level you or the schedule asked for, on the app's -10 to +10 scale.",
+  'Target / Now':"The requested level and reported device level; the latter is not a measured temperature.",
   'Current device level':"The level the Pod is running at right now. It can lag the target while ramping. It is not a measured temperature.",
   'Temperature running':"Whether this side's heating or cooling is actively running.",
   'Schedule type':"How this side's temperature is scheduled: a smart schedule of levels through the night, or a timed setting.",
@@ -36,74 +37,77 @@ const HELP={
   'Timed level':"The level used by a timed temperature setting.",
   'Timed duration (configured)':"How long a timed setting is configured to run, in seconds. It is not a countdown.",
   'Session start':"When Eight Sleep says you got into bed for the latest session.",
-  'Presence end':"When Eight Sleep says you left the bed. It appears after the session closes.",
+  'Presence end':"When Eight Sleep reports the end of presence. Incomplete sessions may change.",
   'Session state':"Incomplete means the session isn't finished or fully processed, so numbers may still change.",
-  'Heart rate':"Latest heart rate sample from the session. Delayed, often by up to an hour.",
+  'Heart rate':"Latest heart rate sample from the session. It may be delayed.",
   'HRV':"Heart rate variability from the latest session sample. Early readings can be noisy.",
   'Respiratory rate':"Breaths per minute from the latest session sample.",
   'Bed temperature':"Temperature at the bed surface from the latest session sample (delayed).",
   'Room temperature':"Room temperature near the Pod from the latest session sample (delayed)."
 };
-function helpFor(box,name){const text=HELP[name];if(text){box.title=text;box.classList.add('has-help');}}
+const openHelp=new Set();
+function helpFor(box,name){
+  const text=HELP[name];if(!text)return;
+  box.title=text;box.classList.add('has-help');
+  const button=document.createElement('button'),tip=document.createElement('span');
+  button.type='button';button.className='help-button';button.textContent='?';button.setAttribute('aria-label',`About ${name}`);
+  tip.className='help-text';tip.textContent=text;tip.hidden=!openHelp.has(name);
+  button.setAttribute('aria-expanded',String(!tip.hidden));
+  button.onclick=()=>{tip.hidden=!tip.hidden;button.setAttribute('aria-expanded',String(!tip.hidden));if(tip.hidden)openHelp.delete(name);else openHelp.add(name);};
+  box.append(button,tip);
+}
+function tile(name,value,stamp,withDot=false){
+  const box=document.createElement('div'),label=document.createElement('span'),text=document.createElement('strong');
+  box.className='metric-tile';label.className='metric-label';label.textContent=name;text.textContent=value??'—';box.append(label,text);
+  if(withDot){const dot=document.createElement('span');dot.className='status-dot';dot.setAttribute('aria-hidden','true');box.append(dot);}
+  if(stamp){const time=document.createElement('small');const date=new Date(stamp);time.textContent=Number.isNaN(date.getTime())?'Sample time unavailable':`Sample: ${date.toLocaleString()}`;box.append(time);}
+  helpFor(box,name);return box;
+}
+function choiceTile(name,options,current){
+  const box=document.createElement('div'),label=document.createElement('span'),chips=document.createElement('div');label.textContent=name;chips.className='choices';
+  const list=options.slice();if(current!==null&&current!==undefined&&!list.some(o=>o[0]===current))list.push([current,String(current)]);
+  for(const [value,text] of list){const chip=document.createElement('em');chip.textContent=text;if(value===current){chip.className='on';chip.setAttribute('aria-current','true');}chips.append(chip);}
+  box.append(label,chips);helpFor(box,name);return box;
+}
+function when(value){if(!value)return '—';const date=new Date(value);return Number.isNaN(date.getTime())?'—':date.toLocaleString();}
 function renderLive(){
-  const grid=$('live-status'), d=deviceData, side=sides.find(s=>s.side===selected);
-  grid.replaceChildren();
-  const row=(name,value)=>{const box=document.createElement('div'), label=document.createElement('span'), text=document.createElement('strong');label.textContent=name;text.textContent=value??'—';helpFor(box,name);box.append(label,text);grid.append(box);};
-  // Enumerated values: show every option, highlight the current one, dim the rest. An unlisted current value is appended so it is never hidden.
-  const choice=(name,options,current)=>{
-    const box=document.createElement('div'), label=document.createElement('span'), chips=document.createElement('div');
-    label.textContent=name; chips.className='choices';
-    const list=options.slice();
-    if(current!==null&&current!==undefined&&!list.some(o=>o[0]===current))list.push([current,String(current)]);
-    for(const [value,text] of list){const chip=document.createElement('em');chip.textContent=text;if(value===current){chip.className='on';chip.setAttribute('aria-current','true');}chips.append(chip);}
-    helpFor(box,name);box.append(label,chips);grid.append(box);
-  };
-  const bool=(name,current,yes='Yes',no='No')=>choice(name,[[true,yes],[false,no]],typeof current==='boolean'?current:null);
-  const modes=[['off','Off'],['smart:bedtime','Bedtime'],['smart:initial','Early sleep'],['smart:final','Late sleep']];
-  const when=value=>{if(!value)return '—';const date=new Date(value);return Number.isNaN(date.getTime())?'—':date.toLocaleString();};
+  const hero=$('live-status'),segments=$('live-segments'),details=$('live-details'),d=deviceData,side=sides.find(s=>s.side===selected);
+  hero.replaceChildren();segments.replaceChildren();details.replaceChildren();
   const level=value=>Number.isInteger(value)?displayLevel(value):'—';
+  const yesNo=(value,yes='Yes',no='No')=>typeof value==='boolean'?(value?yes:no):'—';
+  const bool=(name,value,yes='Yes',no='No')=>choiceTile(name,[[true,yes],[false,no]],typeof value==='boolean'?value:null);
+  hero.append(tile('Side power',yesNo(side?.power,'On','Off'),null,side?.power===true));
+  const modeLabels={'off':'Off','smart:bedtime':'Bedtime','smart:initial':'Early sleep','smart:final':'Late sleep'};
+  hero.append(tile('Active mode',modeLabels[side?.mode]||side?.mode||'—'));
+  hero.append(tile('Water',yesNo(d?.hasWater,'Present','Low / absent')));
+  hero.append(tile('Target / Now',`${level(side?.target)} / ${side?.power===false?'—':level(side?.current)}`));
+  segments.append(bool('Connection',d?.online,'Online','Offline'));
+  segments.append(choiceTile('Schedule type',[['smart','Smart'],['timeBased','Timed']],side?.schedule_type||null));
+  segments.append(choiceTile('Selected side',[['left','Left'],['right','Right'],['solo','Solo']],side?.side||null));
   if(d){
-    bool('Connection',d.online,'Online','Offline');
-    bool('Water',d.hasWater,'Present','Low / absent');
-    bool('Priming',d.priming,'In progress','Not running');
-    bool('Needs priming',d.needsPriming);
-    bool('Temperature available',d.isTemperatureAvailable);
-    row('Last heard',when(d.lastHeard));
-    row('Last primed',when(d.lastPrime));
-    row('Firmware',d.firmwareVersion||'—');
-    bool('Firmware updating',d.firmwareUpdating);
+    details.append(bool('Priming',d.priming,'In progress','Not running'),bool('Needs priming',d.needsPriming),bool('Temperature available',d.isTemperatureAvailable));
+    details.append(tile('Last heard',when(d.lastHeard)),tile('Last primed',when(d.lastPrime)),tile('Firmware',d.firmwareVersion||'—'),bool('Firmware updating',d.firmwareUpdating));
   }
   if(side){
-    choice('Selected side',[['left','Left'],['right','Right'],['solo','Solo']],side.side);
-    bool('Side power',side.power,'On','Off');
-    choice('Active mode',modes,side.mode||null);
-    row('Mode started',when(side.mode_started));
-    row('Target level',level(side.target));
-    row('Current device level',side.power===false?'—':level(side.current));
     const running=side.side==='left'?d?.leftNowHeating:side.side==='right'?d?.rightNowHeating:null;
-    bool('Temperature running',running);
-    choice('Schedule type',[['smart','Smart'],['timeBased','Timed']],side.schedule_type||null);
-    row('Bedtime level',level(side.smart?.bedTimeLevel));
-    row('Early sleep level',level(side.smart?.initialSleepLevel));
-    row('Late sleep level',level(side.smart?.finalSleepLevel));
-    row('Timed level',level(side.timed?.level));
-    row('Timed duration (configured)',Number.isFinite(side.timed?.durationSeconds)?`${side.timed.durationSeconds} seconds`:'—');
+    details.append(bool('Side power',side.power,'On','Off'),choiceTile('Active mode',[['off','Off'],['smart:bedtime','Bedtime'],['smart:initial','Early sleep'],['smart:final','Late sleep']],side.mode||null));
+    details.append(tile('Mode started',when(side.mode_started)),tile('Target level',level(side.target)),tile('Current device level',side.power===false?'—':level(side.current)),bool('Temperature running',running));
+    details.append(tile('Bedtime level',level(side.smart?.bedTimeLevel)),tile('Early sleep level',level(side.smart?.initialSleepLevel)),tile('Late sleep level',level(side.smart?.finalSleepLevel)),tile('Timed level',level(side.timed?.level)),tile('Timed duration (configured)',Number.isFinite(side.timed?.durationSeconds)?`${side.timed.durationSeconds} seconds`:'—'));
   }
 }
 let sessionRequest=0, sessionInFlight=null;
 function renderSession(){
-  const grid=$('session-status');grid.replaceChildren();
-  if(!sessionData||sessionSide!==selected){const msg=document.createElement('div');msg.textContent='No session data available yet.';grid.append(msg);return;}
-  const when=value=>{if(!value)return 'Not reported';const date=new Date(value);return Number.isNaN(date.getTime())?'Not reported':date.toLocaleString();};
-  const row=(name,value,stamp)=>{const box=document.createElement('div'), label=document.createElement('span'), text=document.createElement('strong');label.textContent=name;text.textContent=value;helpFor(box,name);box.append(label,text);if(stamp){const time=document.createElement('small');time.textContent=`Sample: ${when(stamp)}`;box.append(time);}grid.append(box);};
-  row('Session start',when(sessionData.start));
-  row('Presence end',when(sessionData.presence_end));
-  const stateBox=document.createElement('div'),stateLabel=document.createElement('span'),stateChoices=document.createElement('div');
-  stateLabel.textContent='Session state';stateChoices.className='session-choices';
-  for(const [text,value] of [['Complete',false],['Incomplete',true],['Not reported',null]]){const choice=document.createElement('span');choice.textContent=text;choice.className=sessionData.incomplete===value?'session-choice active':'session-choice';if(sessionData.incomplete===value)choice.setAttribute('aria-current','true');stateChoices.append(choice);}
-  helpFor(stateBox,'Session state');stateBox.append(stateLabel,stateChoices);grid.append(stateBox);
-  const specs=[['heartRate','Heart rate',' bpm'],['hrv','HRV',' ms'],['respiratoryRate','Respiratory rate',' breaths/min'],['tempBedC','Bed temperature',''],['tempRoomC','Room temperature','']];
-  for(const [key,label,suffix] of specs){const sample=sessionData.metrics?.[key];let value='Not available';if(sample&&Number.isFinite(sample.value)){if(key==='tempBedC'||key==='tempRoomC'){const n=unit==='F'?sample.value*9/5+32:sample.value;value=`${n.toFixed(1)}°${unit}`;}else value=`${sample.value}${suffix}`;}row(label,value,sample?.timestamp);}
+  const grid=$('session-status'),meta=$('session-meta'),resp=$('session-respiratory');grid.replaceChildren();meta.replaceChildren();resp.replaceChildren();
+  if(!sessionData||sessionSide!==selected){const msg=document.createElement('p');msg.textContent='No session data available yet.';grid.append(msg);return;}
+  meta.append(tile('Session start',when(sessionData.start)));
+  meta.append(choiceTile('Session state',[[false,'Complete'],[true,'Incomplete'],[null,'Not reported']],sessionData.incomplete));
+  if(sessionData.presence_end)meta.append(tile('Presence end',when(sessionData.presence_end)));
+  const specs=[['heartRate','Heart rate',' bpm'],['hrv','HRV',' ms'],['tempBedC','Bed temperature',''],['tempRoomC','Room temperature',''],['respiratoryRate','Respiratory rate',' breaths/min']];
+  for(const [key,label,suffix] of specs){
+    const sample=sessionData.metrics?.[key];let value='Not available';
+    if(sample&&Number.isFinite(sample.value)){if(key==='tempBedC'||key==='tempRoomC'){const n=unit==='F'?sample.value*9/5+32:sample.value;value=`${n.toFixed(1)}°${unit}`;}else value=`${sample.value}${suffix}`;}
+    const card=tile(label,value,sample?.timestamp);(key==='respiratoryRate'?resp:grid).append(card);
+  }
 }
 async function pollSession(){
   if(document.hidden||!selected||busy||dragging||sessionInFlight===selected)return;
