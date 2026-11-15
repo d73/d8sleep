@@ -73,3 +73,5 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border:3px solid #f0f
 .session-section{margin-top:20px}.session-section h3{font-size:15px;margin:0}.live-grid small{display:block;color:#8e9aab;font-size:10px;margin-top:4px}
 
 .session-choices{display:flex;gap:5px;flex-wrap:wrap}.live-grid .session-choice{display:inline-block;color:#737e90;border:1px solid #3a4251;border-radius:8px;padding:3px 6px;margin:0;font-size:11px}.live-grid .session-choice.active{color:#e7e0fb;background:#51466c;border-color:#8a78b3;font-weight:700}
+
+.has-help{cursor:help}.has-help>span:first-child{text-decoration:underline dotted #6b7587;text-underline-offset:3px}
