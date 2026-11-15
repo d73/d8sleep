@@ -12,22 +12,11 @@ function selectUnit(next){ unit=next; $('unit-f').setAttribute('aria-pressed',St
 function showCurrent(raw){const marker=$('current-marker');marker.hidden=!Number.isFinite(raw);if(!marker.hidden){const fraction=(Math.max(-100,Math.min(100,raw))+100)/200;marker.style.left=`calc(${fraction*100}% + ${16-32*fraction}px)`;}}
 function displayLevel(raw){const n=raw/10;return (n>0?'+':'')+n.toFixed(1).replace(/\.0$/,'');}
 function render(){ renderLive(); renderSession(); const item=sides.find(x=>x.side===selected); if(!item)return; $('sides').replaceChildren(); if(sides.length>1) for(const s of sides){const b=document.createElement('button');b.textContent=s.side[0].toUpperCase()+s.side.slice(1);b.className=s.side===selected?'active':'';b.disabled=busy;b.onclick=()=>{selected=s.side;sessionRequest++;sessionInFlight=null;sessionData=null;sessionSide=null;render();void pollSession();};$('sides').append(b);} const level=Number.isInteger(item.target)?item.target:null; if(!dragging){$('value').textContent=level===null?'—':displayLevel(level); $('slider').value=level===null?0:Math.round(level/10);colorSlider(Number($('slider').value));} $('current').textContent=Number.isInteger(item.current)?displayLevel(item.current):'Unavailable'; showCurrent(item.power===false?null:item.current); $('current-detail').hidden=item.power===false; const estimated=degrees(dragging ? Number($('slider').value)*10 : level); $('estimate').textContent=estimated==='—'?'—':`~${estimated}`; $('power').textContent=item.power===null?'Power unavailable':item.power?'On':'Off'; $('power').setAttribute('aria-pressed',String(item.power===true)); $('power').disabled=busy || item.power===null; for(const x of document.querySelectorAll('#slider'))x.disabled=(busy && !levelRunning) || level===null; }
-function tile(name,value,stamp,withDot=false){
-  const box=document.createElement('div'),label=document.createElement('span'),text=document.createElement('strong');
-  box.className='metric-tile';label.className='metric-label';label.textContent=name;text.textContent=value??'—';box.append(label,text);
-  if(withDot){const dot=document.createElement('span');dot.className='status-dot';dot.setAttribute('aria-hidden','true');box.append(dot);}
-  if(stamp){const time=document.createElement('small');const date=new Date(stamp);time.textContent=Number.isNaN(date.getTime())?'Sample time unavailable':`Sample: ${date.toLocaleString()}`;box.append(time);}
-  return box;
-}
 function choiceList(options,current){
   const chips=document.createElement('div');chips.className='choices';
   const list=options.slice();if(current!==null&&current!==undefined&&!list.some(o=>o[0]===current))list.push([current,String(current)]);
   for(const [value,text] of list){const chip=document.createElement('em');chip.textContent=text;if(value===current){chip.className='on';chip.setAttribute('aria-current','true');}chips.append(chip);}
   return chips;
-}
-function choiceTile(name,options,current){
-  const box=document.createElement('div'),label=document.createElement('span');if(name==='Session state')box.classList.add('session-state');label.textContent=name;
-  box.append(label,choiceList(options,current));return box;
 }
 function when(value){if(!value)return '—';const date=new Date(value);return Number.isNaN(date.getTime())?'—':date.toLocaleString();}
 function renderLive(){
@@ -61,17 +50,20 @@ function renderLive(){
 }
 let sessionRequest=0, sessionInFlight=null;
 function renderSession(){
-  const grid=$('session-status'),meta=$('session-meta'),resp=$('session-respiratory');grid.replaceChildren();meta.replaceChildren();resp.replaceChildren();
-  if(!sessionData||sessionSide!==selected){const msg=document.createElement('p');msg.textContent='No session data available yet.';grid.append(msg);return;}
-  meta.append(tile('Session start',when(sessionData.start)));
-  meta.append(choiceTile('Session state',[[false,'Complete'],[true,'Incomplete'],[null,'Not reported']],sessionData.incomplete));
-  if(sessionData.presence_end)meta.append(tile('Presence end',when(sessionData.presence_end)));
-  const specs=[['heartRate','Heart rate',' bpm'],['hrv','HRV',' ms'],['tempBedC','Bed temperature',''],['tempRoomC','Room temperature',''],['respiratoryRate','Resp rate',' breaths/min']];
-  for(const [key,label,suffix] of specs){
-    const sample=sessionData.metrics?.[key];let value='Not available';
-    if(sample&&Number.isFinite(sample.value)){if(key==='tempBedC'||key==='tempRoomC'){const n=unit==='F'?sample.value*9/5+32:sample.value;value=`${Math.round(n)}°${unit}`;}else value=`${Math.round(sample.value)}${suffix}`;}
-    const card=tile(label,value,sample?.timestamp);(key==='respiratoryRate'?resp:grid).append(card);
-  }
+  const grid=$('session-status'),meta=$('session-meta'),details=$('session-respiratory');grid.replaceChildren();meta.replaceChildren();details.replaceChildren();
+  const session=sessionSide===selected?sessionData:null;
+  const state=session?.incomplete===true?'Incomplete':session?.incomplete===false?'Complete':'Not reported';
+  const status=document.createElement('span'),dot=document.createElement('i'),statusText=document.createElement('span');
+  status.className='status-tag';dot.className=session?.incomplete===false?'status-tag-dot good':session?.incomplete===true?'status-tag-dot pending':'status-tag-dot';dot.setAttribute('aria-hidden','true');statusText.textContent=state;status.append(dot,statusText);meta.append(status);
+  const side=document.createElement('span');side.className='status-firmware';side.textContent=`Side: ${selected?selected.charAt(0).toUpperCase()+selected.slice(1):'—'}`;meta.append(side);
+  const delayed=document.createElement('span');delayed.className='status-firmware';delayed.textContent='Delayed data';meta.append(delayed);
+  const specs=[['heartRate','Heart rate',' bpm'],['hrv','HRV',' ms'],['tempBedC','Bed temp',''],['tempRoomC','Room temp','']];
+  const sampleText=(sample,key,suffix)=>{if(!sample||!Number.isFinite(sample.value))return 'Not available';if(key==='tempBedC'||key==='tempRoomC'){const n=unit==='F'?sample.value*9/5+32:sample.value;return `${Math.round(n)}°${unit}`;}return `${Math.round(sample.value)}${suffix}`;};
+  for(const [key,label,suffix] of specs){const sample=session?.metrics?.[key],box=document.createElement('div'),heading=document.createElement('span'),value=document.createElement('strong'),time=document.createElement('small');box.className='bento-card';heading.className='bento-label';heading.textContent=label;value.className='bento-value';value.textContent=sampleText(sample,key,suffix);time.className='bento-subtext';time.textContent=sample?.timestamp?`Sample: ${when(sample.timestamp)}`:'Sample time unavailable';box.append(heading,value,time);grid.append(box);}
+  const stat=(name,value,stamp)=>{const item=document.createElement('div'),label=document.createElement('span'),text=document.createElement('strong');label.textContent=name;text.textContent=value;item.append(label,text);if(stamp){const time=document.createElement('small');time.textContent=`Sample: ${when(stamp)}`;item.append(time);}details.append(item);};
+  const respiratory=session?.metrics?.respiratoryRate;stat('Resp rate',sampleText(respiratory,'respiratoryRate',' breaths/min'),respiratory?.timestamp);
+  stat('Session start',when(session?.start));stat('Presence end',when(session?.presence_end));
+  const stateBox=document.createElement('div'),stateLabel=document.createElement('span');stateLabel.textContent='Session state';const stateChoices=choiceList([[false,'Complete'],[true,'Incomplete'],[null,'Not reported']],session?.incomplete??null);stateChoices.setAttribute('role','group');stateChoices.setAttribute('aria-label','Session states');stateBox.append(stateLabel,stateChoices);details.append(stateBox);
 }
 async function pollSession(){
   if(document.hidden||!selected||busy||dragging||sessionInFlight===selected)return;
