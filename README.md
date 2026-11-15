@@ -23,11 +23,11 @@ From a Windows command prompt in this folder (or use the full path to `pod.bat`)
 
 ```bat
 pod.bat left on
-pod.bat left set -5
+pod.bat left -5
 pod.bat left off
 ```
 
-Use `right` or `solo` for the corresponding side. The side is the first argument and may be omitted only when the account has one assigned side. Grammar: `pod [left|right|solo] on | off | set LEVEL`. `set` accepts whole numbers from -10 to +10 and changes the target level; use `on` separately to turn on an off side. The CLI connects directly using the same `.env` credentials, works without the web app, and returns a nonzero exit code on failure. For other systems, use `python pod.py` with the same arguments.
+Use `right` or `solo` for the corresponding side. The side is the first argument and may be omitted only when the account has one assigned side. Grammar: `pod [left|right|solo] on | off | LEVEL`. A level is a whole number from -10 to +10 (for example `pod.bat left -5`) and changes the target level only; use `on` separately to turn on an off side. The CLI connects directly using the same `.env` credentials, works without the web app, and returns a nonzero exit code on failure. For other systems, use `python pod.py` with the same arguments.
 
 ## Test
 

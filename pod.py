@@ -15,29 +15,25 @@ def level_value(value):
     return level
 
 SIDES = ('left', 'right', 'solo')
-USAGE = 'pod [left|right|solo] on | off | set LEVEL   (LEVEL is a whole number from -10 to +10)'
+USAGE = 'pod [left|right|solo] on | off | LEVEL   (LEVEL is a whole number from -10 to +10)'
 
 def parse(argv):
     parser = argparse.ArgumentParser(prog='pod', usage=USAGE,
-        description='Control an Eight Sleep Pod using the -10 to +10 app scale. Every argument is positional: [side] action [level]. The side may be omitted only when the account has a single side.')
+        description='Control an Eight Sleep Pod using the -10 to +10 app scale. Every argument is positional: [side] on|off|LEVEL. The side may be omitted only when the account has a single side.')
     parser.add_argument('words', nargs='*', help=argparse.SUPPRESS)
     words = parser.parse_args(argv).words
     side = words.pop(0) if words and words[0] in SIDES else None
     if not words:
-        parser.error('missing action: on, off or set LEVEL')
-    action = words.pop(0)
+        parser.error('missing action: on, off or a LEVEL from -10 to 10')
+    if len(words) > 1:
+        parser.error('too many arguments: expected [side] on | off | LEVEL')
+    action = words[0]
     if action in ('on', 'off'):
-        if words:
-            parser.error(f'"{action}" takes no level')
         return side, action, None
-    if action == 'set':
-        if len(words) != 1:
-            parser.error('"set" needs exactly one level from -10 to 10')
-        try:
-            return side, action, level_value(words[0])
-        except argparse.ArgumentTypeError as exc:
-            parser.error(str(exc))
-    parser.error(f'unknown action "{action}": use on, off or set LEVEL')
+    try:
+        return side, 'set', level_value(action)
+    except argparse.ArgumentTypeError:
+        parser.error(f'unknown action "{action}": use on, off or a LEVEL from -10 to 10')
 
 def main(argv=None):
     side_arg, action, level = parse(argv)
