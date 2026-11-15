@@ -75,3 +75,10 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border:3px solid #f0f
 .session-choices{display:flex;gap:5px;flex-wrap:wrap}.live-grid .session-choice{display:inline-block;color:#737e90;border:1px solid #3a4251;border-radius:8px;padding:3px 6px;margin:0;font-size:11px}.live-grid .session-choice.active{color:#e7e0fb;background:#51466c;border-color:#8a78b3;font-weight:700}
 
 .has-help{cursor:help}.has-help>span:first-child{text-decoration:underline dotted #6b7587;text-underline-offset:3px}
+/* Give Pod status more room without pushing it beyond the screen. */
+#drawer-status{width:min(94vw,680px);container-type:inline-size}
+#drawer-status .live-grid>div{padding:8px}
+#drawer-status .live-note{margin-bottom:10px}
+@container (min-width: 480px){#live-status{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@container (min-width: 620px){#live-status{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (min-width:1200px){#drawer-status{width:clamp(340px,calc((100vw - 480px)/2 - 16px),680px)}}
