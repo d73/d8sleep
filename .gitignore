@@ -1,3 +1,6 @@
 .env
 __pycache__/
 *.pyc
+
+.d8sleep.pid
+.d8sleep-server*.log
