@@ -19,11 +19,15 @@ function tile(name,value,stamp,withDot=false){
   if(stamp){const time=document.createElement('small');const date=new Date(stamp);time.textContent=Number.isNaN(date.getTime())?'Sample time unavailable':`Sample: ${date.toLocaleString()}`;box.append(time);}
   return box;
 }
-function choiceTile(name,options,current){
-  const box=document.createElement('div'),label=document.createElement('span'),chips=document.createElement('div');if(name==='Session state')box.classList.add('session-state');label.textContent=name;chips.className='choices';
+function choiceList(options,current){
+  const chips=document.createElement('div');chips.className='choices';
   const list=options.slice();if(current!==null&&current!==undefined&&!list.some(o=>o[0]===current))list.push([current,String(current)]);
   for(const [value,text] of list){const chip=document.createElement('em');chip.textContent=text;if(value===current){chip.className='on';chip.setAttribute('aria-current','true');}chips.append(chip);}
-  box.append(label,chips);return box;
+  return chips;
+}
+function choiceTile(name,options,current){
+  const box=document.createElement('div'),label=document.createElement('span');if(name==='Session state')box.classList.add('session-state');label.textContent=name;
+  box.append(label,choiceList(options,current));return box;
 }
 function when(value){if(!value)return '—';const date=new Date(value);return Number.isNaN(date.getTime())?'—':date.toLocaleString();}
 function renderLive(){
@@ -32,10 +36,12 @@ function renderLive(){
   const level=value=>Number.isInteger(value)?displayLevel(value):'—';
   const yesNo=(value,yes='Yes',no='No')=>typeof value==='boolean'?(value?yes:no):'—';
   const bool=(name,value,yes='Yes',no='No')=>choiceTile(name,[[true,yes],[false,no]],typeof value==='boolean'?value:null);
-  hero.append(tile('Side power',yesNo(side?.power,'On','Off'),null,side?.power===true));
+  const modes=[['off','Off'],['smart:bedtime','Bedtime'],['smart:initial','Early sleep'],['smart:final','Late sleep']];
+  const powerTile=tile('Side power',yesNo(side?.power,'On','Off'),null,side?.power===true);
+  powerTile.append(choiceList([[true,'On'],[false,'Off']],typeof side?.power==='boolean'?side.power:null));hero.append(powerTile);
   const modeLabels={'off':'Off','smart:bedtime':'Bedtime','smart:initial':'Early sleep','smart:final':'Late sleep'};
-  hero.append(tile('Active mode',modeLabels[side?.mode]||side?.mode||'—'));
-  hero.append(tile('Water',yesNo(d?.hasWater,'Present','Low / absent')));
+  const modeTile=tile('Active mode',modeLabels[side?.mode]||side?.mode||'—');modeTile.append(choiceList(modes,side?.mode||null));hero.append(modeTile);
+  const waterTile=tile('Water',yesNo(d?.hasWater,'Present','Low / absent'));waterTile.append(choiceList([[true,'Present'],[false,'Low / absent']],typeof d?.hasWater==='boolean'?d.hasWater:null));hero.append(waterTile);
   hero.append(tile('Target / Now',`${level(side?.target)} / ${side?.power===false?'—':level(side?.current)}`));
   segments.append(bool('Connection',d?.online,'Online','Offline'));
   segments.append(choiceTile('Schedule type',[['smart','Smart'],['timeBased','Timed']],side?.schedule_type||null));
@@ -46,8 +52,7 @@ function renderLive(){
   }
   if(side){
     const running=side.side==='left'?d?.leftNowHeating:side.side==='right'?d?.rightNowHeating:null;
-    details.append(bool('Side power',side.power,'On','Off'),choiceTile('Active mode',[['off','Off'],['smart:bedtime','Bedtime'],['smart:initial','Early sleep'],['smart:final','Late sleep']],side.mode||null));
-    details.append(tile('Mode started',when(side.mode_started)),tile('Target level',level(side.target)),tile('Current device level',side.power===false?'—':level(side.current)),bool('Temperature running',running));
+    details.append(tile('Mode started',when(side.mode_started)),bool('Temperature running',running));
     details.append(tile('Bedtime level',level(side.smart?.bedTimeLevel)),tile('Early sleep level',level(side.smart?.initialSleepLevel)),tile('Late sleep level',level(side.smart?.finalSleepLevel)),tile('Timed level',level(side.timed?.level)),tile('Timed duration (configured)',Number.isFinite(side.timed?.durationSeconds)?`${side.timed.durationSeconds} seconds`:'—'));
   }
 }
