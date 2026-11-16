@@ -10,9 +10,10 @@ main { width: min(100% - 32px, 480px); margin: auto; padding-bottom: 24px; }
 .card-top h1 { font-size: 20px; letter-spacing: -.03em; margin: 0; }
 .power, .unit { border: 1px solid #4a5261; background: #252c38; color: #d8dce5; border-radius: 22px; padding: 10px 15px; cursor: pointer; }
 .power[aria-pressed=true] { background: #31483f; color: #b3e2c9; border-color: #52725f; }
-.sides { display: flex; gap: 6px; margin-top: 18px; }
-.sides:empty { display: none; }
-.sides button { flex: 1; border: 0; border-radius: 10px; background: #252b37; color: #aeb5c3; padding: 10px; cursor: pointer; }
+.sides { display: flex; gap: 6px; margin-top: 18px; min-height: 38px; }
+.sides:empty { visibility: hidden; }
+.sides[hidden] { display: none; }
+.sides button { flex: 1; min-height: 38px; border: 0; border-radius: 10px; background: #252b37; color: #aeb5c3; padding: 10px; cursor: pointer; }
 .sides button.active { background: #47405f; color: #fff; }
 .readout { text-align: center; padding: 24px 0 18px; }
 .readout-label { font-size: 10px; color: #9199aa; letter-spacing: .17em; font-weight: 700; }
