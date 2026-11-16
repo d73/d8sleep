@@ -15,6 +15,28 @@ applyTheme(savedTheme);
 $('theme-day').addEventListener('click', () => applyTheme('day', true));
 $('theme-night').addEventListener('click', () => applyTheme('night', true));
 let sides = [], selected = null, unit = 'F', busy = false, levelRunning = false, queuedLevel = null, dragging = false, deviceData = null, sessionData = null, sessionSide = null;
+// Only side labels are cached; controls remain disabled until fresh status arrives.
+const SIDE_CACHE = 'd8sleep.side-labels';
+function restoreSidePlaceholders() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(SIDE_CACHE));
+    if (!Array.isArray(saved) || saved.length !== 2 || new Set(saved).size !== 2 || !saved.every(s => s === 'left' || s === 'right')) return;
+    for (const side of saved) {
+      const button = document.createElement('button');
+      button.textContent = side[0].toUpperCase() + side.slice(1);
+      button.disabled = true;
+      $('sides').append(button);
+    }
+  } catch { /* An empty, reserved row still prevents a layout jump. */ }
+}
+function rememberSideLabels() {
+  try {
+    const labels = sides.map(s => s.side);
+    if (labels.length === 2 && new Set(labels).size === 2 && labels.every(s => s === 'left' || s === 'right')) sessionStorage.setItem(SIDE_CACHE, JSON.stringify(labels));
+    else sessionStorage.removeItem(SIDE_CACHE);
+  } catch { /* Storage is optional. */ }
+}
+restoreSidePlaceholders();
 document.querySelectorAll('#slider,#power').forEach(x=>x.disabled=true);
 // Approximate community-derived mapping; levels are not thermometer readings.
 const points = [[-100,55],[-90,61],[-58,68],[-17,77],[1,81],[17,86],[44,95],[72,104],[92,110],[100,111]];
@@ -25,7 +47,7 @@ function colorSlider(n){ const t=(Math.max(-10,Math.min(10,n))+10)/20; const rgb
 function selectUnit(next){ unit=next; $('unit-f').setAttribute('aria-pressed',String(unit==='F')); $('unit-c').setAttribute('aria-pressed',String(unit==='C')); render(); }
 function showCurrent(raw){const marker=$('current-marker');marker.hidden=!Number.isFinite(raw);if(!marker.hidden){const fraction=(Math.max(-100,Math.min(100,raw))+100)/200;marker.style.left=`calc(${fraction*100}% + ${16-32*fraction}px)`;}}
 function displayLevel(raw){const n=raw/10;return (n>0?'+':'')+n.toFixed(1).replace(/\.0$/,'');}
-function render(){ renderLive(); renderSession(); const item=sides.find(x=>x.side===selected); if(!item)return; $('sides').replaceChildren(); if(sides.length>1) for(const s of sides){const b=document.createElement('button');b.textContent=s.side[0].toUpperCase()+s.side.slice(1);b.className=s.side===selected?'active':'';b.disabled=busy;b.onclick=()=>{selected=s.side;sessionRequest++;sessionInFlight=null;sessionData=null;sessionSide=null;render();void pollSession();};$('sides').append(b);} const level=Number.isInteger(item.target)?item.target:null; if(!dragging){$('value').textContent=level===null?'—':displayLevel(level); $('slider').value=level===null?0:Math.round(level/10);colorSlider(Number($('slider').value));} $('current').textContent=Number.isInteger(item.current)?displayLevel(item.current):'Unavailable'; showCurrent(item.power===false?null:item.current); $('current-detail').hidden=item.power===false; const estimated=degrees(dragging ? Number($('slider').value)*10 : level); $('estimate').textContent=estimated==='—'?'—':`~${estimated}`; $('power').textContent=item.power===null?'Power unavailable':item.power?'On':'Off'; $('power').setAttribute('aria-pressed',String(item.power===true)); $('power').disabled=busy || item.power===null; for(const x of document.querySelectorAll('#slider'))x.disabled=(busy && !levelRunning) || level===null; }
+function render(){ renderLive(); renderSession(); const item=sides.find(x=>x.side===selected); if(!item)return; rememberSideLabels(); $('sides').hidden=sides.length<2; $('sides').replaceChildren(); if(sides.length>1) for(const s of sides){const b=document.createElement('button');b.textContent=s.side[0].toUpperCase()+s.side.slice(1);b.className=s.side===selected?'active':'';b.disabled=busy;b.onclick=()=>{selected=s.side;sessionRequest++;sessionInFlight=null;sessionData=null;sessionSide=null;render();void pollSession();};$('sides').append(b);} const level=Number.isInteger(item.target)?item.target:null; if(!dragging){$('value').textContent=level===null?'—':displayLevel(level); $('slider').value=level===null?0:Math.round(level/10);colorSlider(Number($('slider').value));} $('current').textContent=Number.isInteger(item.current)?displayLevel(item.current):'Unavailable'; showCurrent(item.power===false?null:item.current); $('current-detail').hidden=item.power===false; const estimated=degrees(dragging ? Number($('slider').value)*10 : level); $('estimate').textContent=estimated==='—'?'—':`~${estimated}`; $('power').textContent=item.power===null?'Power unavailable':item.power?'On':'Off'; $('power').setAttribute('aria-pressed',String(item.power===true)); $('power').disabled=busy || item.power===null; for(const x of document.querySelectorAll('#slider'))x.disabled=(busy && !levelRunning) || level===null; }
 function choiceList(options,current){
   const chips=document.createElement('div');chips.className='choices';
   const list=options.slice();if(current!==null&&current!==undefined&&!list.some(o=>o[0]===current))list.push([current,String(current)]);
