@@ -163,7 +163,7 @@ function renderHeartChart(samples){
     if(index===selectedIndex)return;
     selectedIndex=index;const point=points[index];
     selectedPoint.setAttribute('cx',String(x(point.time)));selectedPoint.setAttribute('cy',String(y(point.value)));selectedPoint.setAttribute('visibility','visible');
-    detail.textContent=`${point.value} bpm · ${new Date(point.time).toLocaleString()}`;
+    detail.textContent=`${Math.round(point.value)} bpm · ${new Date(point.time).toLocaleString()}`;
   }
   function selectAtPointer(event){
     const rect=svg.getBoundingClientRect();if(!rect.width)return;
