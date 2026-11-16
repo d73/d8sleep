@@ -148,17 +148,50 @@ function renderHeartChart(samples){
   let min=Infinity,max=-Infinity;for(const p of points){min=Math.min(min,p.value);max=Math.max(max,p.value);}
   const low=Math.floor((min-5)/10)*10, high=Math.ceil((max+5)/10)*10;
   const first=points[0].time,last=points[points.length-1].time, x=time=>first===last?173:36+(time-first)/(last-first)*274, y=value=>140-(value-low)/(high-low)*128;
-  svg.setAttribute('viewBox','0 0 320 160');svg.setAttribute('role','img');svg.setAttribute('aria-label',`Heart rate chart, ${points.length} ${points.length===1?'sample':'samples'}, range ${Math.round(min)} to ${Math.round(max)} beats per minute, from ${new Date(first).toLocaleString()} to ${new Date(last).toLocaleString()}.`);
+  svg.setAttribute('viewBox','0 0 320 160');svg.setAttribute('role','img');svg.setAttribute('tabindex','0');svg.setAttribute('aria-label',`Heart rate chart, ${points.length} ${points.length===1?'sample':'samples'}, range ${Math.round(min)} to ${Math.round(max)} beats per minute, from ${new Date(first).toLocaleString()} to ${new Date(last).toLocaleString()}. Use left and right arrow keys to inspect samples.`);
   for(const value of [low,(low+high)/2,high]){const yy=y(value),line=node('line',{x1:36,x2:310,y1:yy,y2:yy,class:'chart-grid-line'}),label=node('text',{x:30,y:yy+3,'text-anchor':'end',class:'chart-axis-label'});label.textContent=String(Math.round(value));svg.append(line,label);}
   let path='',gaps=false;
   for(let i=0;i<points.length;i++){const p=points[i],separate=i===0||p.time-points[i-1].time>30*60*1000;if(i>0&&separate)gaps=true;path+=`${separate?'M':'L'}${x(p.time).toFixed(2)} ${y(p.value).toFixed(2)} `;}
   svg.append(node('path',{d:path,class:'chart-line'}));
   const stride=Math.max(1,Math.ceil(points.length/150));for(let i=0;i<points.length;i++){if(i%stride===0||i===points.length-1)svg.append(node('circle',{cx:x(points[i].time),cy:y(points[i].value),r:2.7,class:'chart-point'}));}
+  const detail=document.createElement('p');detail.className='heart-chart-detail';detail.setAttribute('aria-live','polite');
+  const hint='Hover, tap, or use arrow keys to inspect a sample.';detail.textContent=hint;
+  const selectedPoint=node('circle',{r:4.5,class:'chart-selected-point',visibility:'hidden'});svg.append(selectedPoint);
+  svg.append(node('rect',{x:0,y:0,width:320,height:160,fill:'transparent'}));
+  let selectedIndex=-1;
+  function showPoint(index){
+    if(index===selectedIndex)return;
+    selectedIndex=index;const point=points[index];
+    selectedPoint.setAttribute('cx',String(x(point.time)));selectedPoint.setAttribute('cy',String(y(point.value)));selectedPoint.setAttribute('visibility','visible');
+    detail.textContent=`${point.value} bpm · ${new Date(point.time).toLocaleString()}`;
+  }
+  function selectAtPointer(event){
+    const rect=svg.getBoundingClientRect();if(!rect.width)return;
+    const position=(event.clientX-rect.left)*320/rect.width;
+    const fraction=Math.max(0,Math.min(1,(position-36)/274));
+    const time=first+(last-first)*fraction;
+    let lo=0,hi=points.length-1;
+    while(lo<hi){const mid=Math.floor((lo+hi)/2);if(points[mid].time<time)lo=mid+1;else hi=mid;}
+    const index=lo>0 && time-points[lo-1].time<=points[lo].time-time?lo-1:lo;
+    showPoint(index);
+  }
+  svg.addEventListener('pointermove',selectAtPointer);
+  svg.addEventListener('click',selectAtPointer);
+  svg.addEventListener('focus',()=>showPoint(Math.max(0,selectedIndex)));
+  svg.addEventListener('keydown',event=>{
+    let next=Math.max(0,selectedIndex);
+    if(event.key==='ArrowRight')next=Math.min(points.length-1,next+1);
+    else if(event.key==='ArrowLeft')next=Math.max(0,next-1);
+    else if(event.key==='Home')next=0;
+    else if(event.key==='End')next=points.length-1;
+    else return;
+    event.preventDefault();showPoint(next);
+  });
   container.append(svg);
   const range=document.createElement('div');range.className='heart-chart-range';
   const format=time=>new Date(time).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
   const start=document.createElement('span');start.textContent=format(first);range.append(start);
-  if(last!==first){const end=document.createElement('span');end.textContent=format(last);range.append(end);}container.append(range);
+  if(last!==first){const end=document.createElement('span');end.textContent=format(last);range.append(end);}container.append(range,detail);
   if(gaps){const note=document.createElement('p');note.className='heart-chart-note';note.textContent='Gaps over 30 minutes are not connected.';container.append(note);}
 }
 async function pollSession(){

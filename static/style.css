@@ -142,6 +142,8 @@ main{padding-top:16px}.card-identity{display:flex;align-items:center;gap:10px;mi
 
 .heart-chart{margin-top:10px;padding:14px;background:#202733;border:1px solid #3a4554;border-radius:14px}
 .heart-chart-heading{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}.heart-chart-heading h3{font-size:14px;margin:0}.heart-chart-heading span,.heart-chart-range,.heart-chart-note,.heart-chart-empty{font-size:11px;color:#a9b3c1}.heart-chart svg{display:block;width:100%;height:auto;margin-top:8px;overflow:visible}.chart-grid-line{stroke:#46515f;stroke-width:1}.chart-axis-label{fill:#a9b3c1;font-size:10px}.chart-line{fill:none;stroke:#b9a7ef;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}.chart-point{fill:#cfc2f5}.heart-chart-range{display:flex;justify-content:space-between;gap:10px}.heart-chart-range span:last-child{text-align:right}.heart-chart-note,.heart-chart-empty{margin:8px 0 0}
+.heart-chart svg{cursor:crosshair;touch-action:pan-y}.chart-selected-point{fill:var(--app-accent,#b9a7ef);stroke:#fff;stroke-width:1.5;pointer-events:none}.heart-chart-detail{min-height:1.4em;margin:8px 0 0;color:#a9b3c1;font-size:11px}
+:root[data-theme=day] .heart-chart-detail{color:#536174}
 
 /* Display controls and the current level share the card's lower edge. */
 .details{gap:12px;flex-wrap:wrap}
