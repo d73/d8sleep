@@ -145,6 +145,15 @@ main{padding-top:16px}.card-identity{display:flex;align-items:center;gap:10px;mi
 .details{gap:12px;flex-wrap:wrap}
 .display-controls{display:flex;align-items:center;gap:8px}
 #current-detail{margin-left:auto;text-align:right}
+.settings-toggle{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border:1px solid #4a5261;border-radius:50%;background:#252c38;color:#d8dce5;cursor:pointer}
+.settings-panel{margin-top:12px;border-top:1px solid #353b49}
+.settings-panel[hidden]{display:none}
+.settings-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;color:#a8b0bd;font-size:13px}
+.accent-options{display:flex;align-items:center;gap:8px}
+.accent-choice{width:28px;height:28px;border:2px solid transparent;border-radius:50%;cursor:pointer}
+.accent-choice[aria-pressed=true]{outline:2px solid currentColor;outline-offset:2px}
+.accent-blue{background:#3974b8;color:#3974b8}.accent-teal{background:#2a7e7b;color:#2a7e7b}.accent-violet{background:#695c91;color:#695c91}
+.settings-row input[type=checkbox]{width:20px;height:20px;accent-color:var(--app-accent,#695c91);cursor:pointer}
 
 /* Day mode applies to the main card and both detail panels. */
 :root[data-theme=day]{color-scheme:light;background:#f0f3f9;color:#1e2737}
@@ -153,7 +162,9 @@ main{padding-top:16px}.card-identity{display:flex;align-items:center;gap:10px;mi
 :root[data-theme=day] .connection,:root[data-theme=day] .estimate,:root[data-theme=day] .range-labels,:root[data-theme=day] .details,:root[data-theme=day] .live-updated,:root[data-theme=day] .live-note,:root[data-theme=day] .live-refresh-note{color:#536174}
 :root[data-theme=day] .details{border-color:#d5dce7}
 :root[data-theme=day] .details strong{color:#243044}
-:root[data-theme=day] .power,:root[data-theme=day] .unit-switch,:root[data-theme=day] .tab,:root[data-theme=day] .sides button{background:#edf1f7;border-color:#b9c5d5;color:#344257}
+:root[data-theme=day] .power,:root[data-theme=day] .unit-switch,:root[data-theme=day] .settings-toggle,:root[data-theme=day] .tab,:root[data-theme=day] .sides button{background:#edf1f7;border-color:#b9c5d5;color:#344257}
+:root[data-theme=day] .settings-panel{border-color:#d5dce7}
+:root[data-theme=day] .settings-row{color:#536174}
 :root[data-theme=day] .unit-switch .unit{color:#47566c}
 :root[data-theme=day] .unit-switch .unit[aria-pressed=true],:root[data-theme=day] .sides button.active,:root[data-theme=day] .tab.active,:root[data-theme=day] .tab[aria-expanded=true]{background:#62517f;border-color:#62517f;color:#fff}
 :root[data-theme=day] .power[aria-pressed=true]{background:#d7eee1;border-color:#8bb49a;color:#20553a}
@@ -171,3 +182,14 @@ main{padding-top:16px}.card-identity{display:flex;align-items:center;gap:10px;mi
 :root[data-theme=day] .chart-grid-line{stroke:#c5cfdd}
 :root[data-theme=day] .chart-line{stroke:#62517f}
 :root[data-theme=day] .chart-point{fill:#62517f}
+
+/* The chosen accent affects selection highlights, not temperature data colors. */
+:root{--app-accent:#695c91}
+:root[data-theme=day]{--app-accent:#62517f}
+:root[data-accent=blue]{--app-accent:#3974b8}
+:root[data-accent=teal]{--app-accent:#2a7e7b}
+:root[data-theme] .unit-switch .unit[aria-pressed=true],
+:root[data-theme] .sides button.active,
+:root[data-theme] .tab.active,
+:root[data-theme] .tab[aria-expanded=true],
+:root[data-theme] .choices em.on{background:var(--app-accent);border-color:var(--app-accent);color:#fff}

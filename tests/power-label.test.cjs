@@ -4,7 +4,8 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '../static/app.js'), 'utf8');
-const code = source.slice(source.indexOf('const POWER_LABEL_CACHE'), source.indexOf('document.querySelectorAll'));
+const start = source.indexOf('const POWER_LABEL_CACHE');
+const code = source.slice(start, source.indexOf('document.querySelectorAll', start));
 
 test('reload restores only a known power label and does not enable the control', () => {
   let value = 'Off';

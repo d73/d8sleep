@@ -15,6 +15,23 @@ applyTheme(savedTheme);
 $('theme-day').addEventListener('click', () => applyTheme('day', true));
 $('theme-night').addEventListener('click', () => applyTheme('night', true));
 let sides = [], selected = null, unit = 'F', busy = false, levelRunning = false, queuedLevel = null, dragging = false, deviceData = null, sessionData = null, sessionSide = null;
+const ACCENT_KEY = 'd8sleep.accent', SHOW_TEMP_KEY = 'd8sleep.show-temperature';
+function applyAccent(accent, persist = false){
+  if(!['blue','teal','violet'].includes(accent))accent='violet';
+  document.documentElement.dataset.accent=accent;
+  for(const button of document.querySelectorAll('button[data-accent]'))button.setAttribute('aria-pressed',String(button.dataset.accent===accent));
+  if(persist)try{localStorage.setItem(ACCENT_KEY,accent);}catch{}
+}
+function applyShowTemperature(show, persist = false){
+  $('estimate').hidden=!show;
+  $('show-temperature').checked=show;
+  if(persist)try{localStorage.setItem(SHOW_TEMP_KEY,String(show));}catch{}
+}
+let savedAccent='violet', savedShowTemperature=false;
+try{savedAccent=localStorage.getItem(ACCENT_KEY)||'violet';savedShowTemperature=localStorage.getItem(SHOW_TEMP_KEY)==='true';}catch{}
+applyAccent(savedAccent);applyShowTemperature(savedShowTemperature);
+for(const button of document.querySelectorAll('button[data-accent]'))button.addEventListener('click',()=>applyAccent(button.dataset.accent,true));
+$('show-temperature').addEventListener('change',event=>applyShowTemperature(event.target.checked,true));
 let statusAvailable = false;
 // Only side labels are cached; controls remain disabled until fresh status arrives.
 const SIDE_CACHE = 'd8sleep.side-labels';
@@ -204,6 +221,9 @@ async function sendLevels(){
 }
 $('slider').oninput=()=>{if($('slider').disabled)return;dragging=true;colorSlider(Number($('slider').value));$('value').textContent=displayLevel(Number($('slider').value)*10);$('estimate').textContent=`~${degrees(Number($('slider').value)*10)}`;};$('slider').onchange=()=>{dragging=false;level(Number($('slider').value));};
 for(const event of ['pointerup','pointercancel','touchend','touchcancel','keyup'])$('slider').addEventListener(event,()=>setTimeout(()=>{if(dragging){dragging=false;render();}},0));$('power').onclick=()=>change('/api/power',{side:selected,on:!sides.find(s=>s.side===selected).power});$('unit-f').onclick=()=>selectUnit('F');$('unit-c').onclick=()=>selectUnit('C');refresh();
+function setSettingsOpen(open){$('settings-panel').hidden=!open;$('settings-toggle').setAttribute('aria-expanded',String(open));}
+$('settings-toggle').addEventListener('click',()=>setSettingsOpen($('settings-panel').hidden));
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('settings-panel').hidden){setSettingsOpen(false);$('settings-toggle').focus();}});
 // Drawers: Pod status slides out left of the control, session biometrics right. Escape, backdrop or × closes.
 function setDrawer(id,open){const d=$(id);d.classList.toggle('open',open);d.setAttribute('aria-hidden',String(!open));const tab=id==='drawer-status'?$('tab-status'):$('tab-session');tab.setAttribute('aria-expanded',String(open));tab.classList.toggle('active',open);const any=document.querySelector('.drawer.open');$('drawer-backdrop').hidden=!any;if(open&&id==='drawer-status')void pollDevice();}
 function toggleDrawer(id){const d=$(id);for(const other of document.querySelectorAll('.drawer'))if(other!==d&&other.classList.contains('open')&&window.matchMedia('(max-width:1199px)').matches)setDrawer(other.id,false);setDrawer(id,!d.classList.contains('open'));}

@@ -5,7 +5,8 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 const source = fs.readFileSync(path.join(__dirname, '../static/app.js'), 'utf8');
-const code = source.slice(source.indexOf('const SIDE_CACHE'), source.indexOf('document.querySelectorAll'));
+const start = source.indexOf('const SIDE_CACHE');
+const code = source.slice(start, source.indexOf('document.querySelectorAll', start));
 function fixture(saved, blocked = false) {
   const row = { children: [], append(button) { this.children.push(button); } };
   let value = saved;
