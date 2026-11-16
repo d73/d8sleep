@@ -121,15 +121,15 @@ function renderLive(){
   stat('Last heard',when(d?.lastHeard));stat('Last primed',when(d?.lastPrime));
   const running=side?.side==='left'?d?.leftNowHeating:side?.side==='right'?d?.rightNowHeating:null;stat('Temperature running',yesNo(running));
 }
-let sessionRequest=0, sessionInFlight=null;
+let sessionRequest=0, sessionInFlight=null, sessionCheckedAt=null;
 function renderSession(){
   const grid=$('session-status'),meta=$('session-meta'),details=$('session-respiratory');grid.replaceChildren();meta.replaceChildren();details.replaceChildren();
   const session=sessionSide===selected?sessionData:null;
+  $('session-updated').textContent=sessionSide===selected && sessionCheckedAt ? `Checked ${when(sessionCheckedAt)}` : '';
   const state=session?.incomplete===true?'Incomplete':session?.incomplete===false?'Complete':'Not reported';
   const status=document.createElement('span'),dot=document.createElement('i'),statusText=document.createElement('span');
   status.className='status-tag';dot.className=session?.incomplete===false?'status-tag-dot good':session?.incomplete===true?'status-tag-dot pending':'status-tag-dot';dot.setAttribute('aria-hidden','true');statusText.textContent=state;status.append(dot,statusText);meta.append(status);
   const side=document.createElement('span');side.className='status-firmware';side.textContent=`Side: ${selected?selected.charAt(0).toUpperCase()+selected.slice(1):'—'}`;meta.append(side);
-  const delayed=document.createElement('span');delayed.className='status-firmware';delayed.textContent='Delayed data';meta.append(delayed);
   const specs=[['heartRate','Heart rate',' bpm'],['hrv','HRV',' ms'],['tempBedC','Bed temp',''],['tempRoomC','Room temp','']];
   const sampleText=(sample,key,suffix)=>{if(!sample||!Number.isFinite(sample.value))return 'Not available';if(key==='tempBedC'||key==='tempRoomC'){const n=unit==='F'?sample.value*9/5+32:sample.value;return `${Math.round(n)}°${unit}`;}return `${Math.round(sample.value)}${suffix}`;};
   for(const [key,label,suffix] of specs){const sample=session?.metrics?.[key],box=document.createElement('div'),heading=document.createElement('span'),value=document.createElement('strong'),time=document.createElement('small');box.className='bento-card';heading.className='bento-label';heading.textContent=label;value.className='bento-value';value.textContent=sampleText(sample,key,suffix);time.className='bento-subtext';time.textContent=sample?.timestamp?`Sample: ${when(sample.timestamp)}`:'Sample time unavailable';box.append(heading,value,time);grid.append(box);}
@@ -164,7 +164,7 @@ function renderHeartChart(samples){
 async function pollSession(){
   if(document.hidden||!selected||busy||dragging||sessionInFlight===selected)return;
   const side=selected, request=++sessionRequest;sessionInFlight=side;
-  try{const data=await api(`/api/session?side=${encodeURIComponent(side)}`);if(selected!==side||request!==sessionRequest)return;sessionData=data.session;sessionSide=side;$('session-error').textContent='';renderSession();}
+  try{const data=await api(`/api/session?side=${encodeURIComponent(side)}`);if(selected!==side||request!==sessionRequest)return;sessionData=data.session;sessionSide=side;sessionCheckedAt=new Date().toISOString();$('session-error').textContent='';renderSession();}
   catch(e){if(selected===side&&request===sessionRequest){$('session-error').textContent=`Session data: ${e.message}`;}}
   finally{if(request===sessionRequest)sessionInFlight=null;}
 }
