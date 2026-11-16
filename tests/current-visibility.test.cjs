@@ -28,15 +28,25 @@ test('current reading is hidden for missing, off or unavailable values', () => {
   assert.equal(page.detail.hidden, true);
 });
 
-test('refresh hides the reading until completion and leaves it hidden on failure', async () => {
+test('a routine refresh retains the reading and failure hides it until recovery', async () => {
   let finish;
   const page = fixture(() => new Promise(resolve => { finish = resolve; }));
   const pending = page.ctx.readStatus();
-  assert.equal(page.detail.hidden, true);
+  assert.equal(page.detail.hidden, false);
   finish({});
   await pending;
   assert.equal(page.detail.hidden, false);
   page.ctx.api = async () => { throw Error('offline'); };
   await assert.rejects(page.ctx.readStatus(), /offline/);
+  assert.equal(page.detail.hidden, true);
+  page.ctx.statusAvailable = true;
+  page.ctx.syncCurrentDetail();
+  assert.equal(page.detail.hidden, false);
+});
+
+test('initial loading stays hidden until a status has arrived', () => {
+  const page = fixture(() => {});
+  page.ctx.statusAvailable = false;
+  page.ctx.syncCurrentDetail();
   assert.equal(page.detail.hidden, true);
 });

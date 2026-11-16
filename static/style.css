@@ -28,6 +28,7 @@ input[type=range] { width: 100%; accent-color: var(--slider-color, #68a2ec); cur
 .unit { font-size: 12px; padding: 7px 10px; }
 .message { min-height: 22px; font-size: 13px; color: #e5b4aa; margin-top: 12px; }
 button:disabled, input:disabled { opacity: .45; cursor: wait; }
+input[type=range][data-off=true]:disabled { opacity: .35; cursor: not-allowed; }
 :focus-visible { outline: 2px solid #c5b7fa; outline-offset: 3px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 
