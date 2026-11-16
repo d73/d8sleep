@@ -138,3 +138,35 @@ main{padding-top:16px}.card-identity{display:flex;align-items:center;gap:10px;mi
 
 .heart-chart{margin-top:10px;padding:14px;background:#202733;border:1px solid #3a4554;border-radius:14px}
 .heart-chart-heading{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}.heart-chart-heading h3{font-size:14px;margin:0}.heart-chart-heading span,.heart-chart-range,.heart-chart-note,.heart-chart-empty{font-size:11px;color:#a9b3c1}.heart-chart svg{display:block;width:100%;height:auto;margin-top:8px;overflow:visible}.chart-grid-line{stroke:#46515f;stroke-width:1}.chart-axis-label{fill:#a9b3c1;font-size:10px}.chart-line{fill:none;stroke:#b9a7ef;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}.chart-point{fill:#cfc2f5}.heart-chart-range{display:flex;justify-content:space-between;gap:10px}.heart-chart-range span:last-child{text-align:right}.heart-chart-note,.heart-chart-empty{margin:8px 0 0}
+
+/* Display controls and the current level share the card's lower edge. */
+.details{gap:12px;flex-wrap:wrap}
+.display-controls{display:flex;align-items:center;gap:8px}
+#current-detail{margin-left:auto;text-align:right}
+.theme-toggle{width:40px;height:40px;border:1px solid #4a5261;border-radius:50%;background:#252c38;color:#e5e7ee;font-size:20px;line-height:1;cursor:pointer}
+
+/* Day mode applies to the main card and both detail panels. */
+:root[data-theme=day]{color-scheme:light;background:#f0f3f9;color:#1e2737}
+:root[data-theme=day] body{background:radial-gradient(ellipse at 50% -10%,#dce6f6 0,transparent 50%),#f0f3f9}
+:root[data-theme=day] .card{background:#fff;border-color:#ccd4e1;box-shadow:0 20px 50px #34455d20}
+:root[data-theme=day] .connection,:root[data-theme=day] .estimate,:root[data-theme=day] .range-labels,:root[data-theme=day] .details,:root[data-theme=day] .live-updated,:root[data-theme=day] .live-note,:root[data-theme=day] .live-refresh-note{color:#536174}
+:root[data-theme=day] .details{border-color:#d5dce7}
+:root[data-theme=day] .details strong{color:#243044}
+:root[data-theme=day] .power,:root[data-theme=day] .unit-switch,:root[data-theme=day] .theme-toggle,:root[data-theme=day] .tab,:root[data-theme=day] .sides button{background:#edf1f7;border-color:#b9c5d5;color:#344257}
+:root[data-theme=day] .unit-switch .unit{color:#47566c}
+:root[data-theme=day] .unit-switch .unit[aria-pressed=true],:root[data-theme=day] .sides button.active,:root[data-theme=day] .tab.active,:root[data-theme=day] .tab[aria-expanded=true]{background:#62517f;border-color:#62517f;color:#fff}
+:root[data-theme=day] .power[aria-pressed=true]{background:#d7eee1;border-color:#8bb49a;color:#20553a}
+:root[data-theme=day] .tab:hover{background:#dbe4f0;color:#26354a}
+:root[data-theme=day] .drawer-close{color:#344257}
+:root[data-theme=day] .status-strip,:root[data-theme=day] .bento-card,:root[data-theme=day] .status-ministats,:root[data-theme=day] .heart-chart,:root[data-theme=day] .live-grid>div,:root[data-theme=day] .metric-tile,:root[data-theme=day] .segment-grid>div,:root[data-theme=day] .session-meta>div{background:#f2f5fa;border-color:#cbd5e3;color:#26354a}
+:root[data-theme=day] .bento-value,:root[data-theme=day] .status-ministats strong,:root[data-theme=day] .live-grid strong{color:#243044}
+:root[data-theme=day] .bento-label{color:#514974}
+:root[data-theme=day] .bento-subtext,:root[data-theme=day] .status-ministats span,:root[data-theme=day] .bento-grid small,:root[data-theme=day] .live-grid span,:root[data-theme=day] .metric-tile small,:root[data-theme=day] .metric-tile .metric-label,:root[data-theme=day] .segment-grid>div>span,:root[data-theme=day] .session-meta>div>span,:root[data-theme=day] .heart-chart-heading span,:root[data-theme=day] .heart-chart-range,:root[data-theme=day] .heart-chart-note,:root[data-theme=day] .heart-chart-empty{color:#536174}
+:root[data-theme=day] .choices em{color:#536174;border-color:#a3afc0}
+:root[data-theme=day] .choices em.on{color:#fff;background:#62517f;border-color:#62517f}
+:root[data-theme=day] .status-firmware{color:#47566c}
+:root[data-theme=day] .delayed,:root[data-theme=day] .message,:root[data-theme=day] .live-error{color:#a03d32}
+:root[data-theme=day] .chart-axis-label{fill:#536174}
+:root[data-theme=day] .chart-grid-line{stroke:#c5cfdd}
+:root[data-theme=day] .chart-line{stroke:#62517f}
+:root[data-theme=day] .chart-point{fill:#62517f}

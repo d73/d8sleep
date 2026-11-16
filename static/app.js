@@ -1,5 +1,21 @@
 'use strict';
 const $ = id => document.getElementById(id);
+const THEME_KEY = 'd8sleep.theme';
+function applyTheme(theme, persist = false) {
+  const day = theme === 'day';
+  document.documentElement.dataset.theme = day ? 'day' : 'night';
+  const button = $('theme-toggle');
+  const label = day ? 'Switch to night mode' : 'Switch to day mode';
+  button.textContent = day ? '☾' : '☀';
+  button.setAttribute('aria-label', label);
+  button.title = label;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', day ? '#f0f3f9' : '#10141c');
+  if (persist) try { localStorage.setItem(THEME_KEY, day ? 'day' : 'night'); } catch {}
+}
+let savedTheme = 'night';
+try { savedTheme = localStorage.getItem(THEME_KEY) || 'night'; } catch {}
+applyTheme(savedTheme);
+$('theme-toggle').addEventListener('click', () => applyTheme(document.documentElement.dataset.theme === 'day' ? 'night' : 'day', true));
 let sides = [], selected = null, unit = 'F', busy = false, levelRunning = false, queuedLevel = null, dragging = false, deviceData = null, sessionData = null, sessionSide = null;
 document.querySelectorAll('#slider,#power').forEach(x=>x.disabled=true);
 // Approximate community-derived mapping; levels are not thermometer readings.
