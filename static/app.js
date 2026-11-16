@@ -15,23 +15,26 @@ applyTheme(savedTheme);
 $('theme-day').addEventListener('click', () => applyTheme('day', true));
 $('theme-night').addEventListener('click', () => applyTheme('night', true));
 let sides = [], selected = null, unit = 'F', busy = false, levelRunning = false, queuedLevel = null, dragging = false, deviceData = null, sessionData = null, sessionSide = null;
-const ACCENT_KEY = 'd8sleep.accent', SHOW_TEMP_KEY = 'd8sleep.show-temperature';
+const ACCENT_KEY = 'd8sleep.accent', TEMPERATURE_KEY = 'd8sleep.temperature';
 function applyAccent(accent, persist = false){
-  if(!['blue','teal','violet'].includes(accent))accent='violet';
+  if(!['blue','teal','amber','rose','plum'].includes(accent))accent='blue';
   document.documentElement.dataset.accent=accent;
   for(const button of document.querySelectorAll('button[data-accent]'))button.setAttribute('aria-pressed',String(button.dataset.accent===accent));
   if(persist)try{localStorage.setItem(ACCENT_KEY,accent);}catch{}
 }
-function applyShowTemperature(show, persist = false){
-  $('estimate').hidden=!show;
-  $('show-temperature').checked=show;
-  if(persist)try{localStorage.setItem(SHOW_TEMP_KEY,String(show));}catch{}
+function applyTemperature(choice, persist = false){
+  if(!['off','C','F'].includes(choice))choice='off';
+  if(choice!=='off')unit=choice;
+  $('estimate').hidden=choice==='off';
+  $('unit-off').setAttribute('aria-pressed',String(choice==='off'));
+  $('unit-c').setAttribute('aria-pressed',String(choice==='C'));
+  $('unit-f').setAttribute('aria-pressed',String(choice==='F'));
+  if(persist){try{localStorage.setItem(TEMPERATURE_KEY,choice);}catch{}render();}
 }
-let savedAccent='violet', savedShowTemperature=false;
-try{savedAccent=localStorage.getItem(ACCENT_KEY)||'violet';savedShowTemperature=localStorage.getItem(SHOW_TEMP_KEY)==='true';}catch{}
-applyAccent(savedAccent);applyShowTemperature(savedShowTemperature);
+let savedAccent='blue', savedTemperature='off';
+try{savedAccent=localStorage.getItem(ACCENT_KEY)||'blue';savedTemperature=localStorage.getItem(TEMPERATURE_KEY)||'off';}catch{}
+applyAccent(savedAccent);applyTemperature(savedTemperature);
 for(const button of document.querySelectorAll('button[data-accent]'))button.addEventListener('click',()=>applyAccent(button.dataset.accent,true));
-$('show-temperature').addEventListener('change',event=>applyShowTemperature(event.target.checked,true));
 let statusAvailable = false;
 // Only side labels are cached; controls remain disabled until fresh status arrives.
 const SIDE_CACHE = 'd8sleep.side-labels';
@@ -71,7 +74,7 @@ function degrees(level) { if (typeof level !== 'number' || level < -100 || level
 function say(text, online=false){ $('message').textContent=text; $('connection').textContent=online?'Connected':'Needs attention'; $('connection').classList.toggle('online',online); }
 async function api(path, body){ let response; try {response=await fetch(path, body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{cache:'no-store'});} catch {throw Error('Can’t reach d8sleep. Check your connection.');} const data=await response.json(); if(!response.ok) {const error=Error(data.error || 'Something went wrong.'); error.status=response.status;throw error;} return data; }
 function colorSlider(n){ const t=(Math.max(-10,Math.min(10,n))+10)/20; const rgb=[Math.round(91+151*t),Math.round(159-57*t),Math.round(238-121*t)]; const color=`rgb(${rgb.join(' ')})`; $('slider').style.setProperty('--slider-color',color); $('target-circle').style.setProperty('--slider-color',color); }
-function selectUnit(next){ unit=next; $('unit-f').setAttribute('aria-pressed',String(unit==='F')); $('unit-c').setAttribute('aria-pressed',String(unit==='C')); render(); }
+
 function showCurrent(raw){const marker=$('current-marker');marker.hidden=!Number.isFinite(raw);if(!marker.hidden){const fraction=(Math.max(-100,Math.min(100,raw))+100)/200;marker.style.left=`calc(${fraction*100}% + ${16-32*fraction}px)`;}}
 function displayLevel(raw){const n=raw/10;return (n>0?'+':'')+n.toFixed(1).replace(/\.0$/,'');}
 function syncSliderAvailability(item, level){
@@ -220,7 +223,7 @@ async function sendLevels(){
   }
 }
 $('slider').oninput=()=>{if($('slider').disabled)return;dragging=true;colorSlider(Number($('slider').value));$('value').textContent=displayLevel(Number($('slider').value)*10);$('estimate').textContent=`~${degrees(Number($('slider').value)*10)}`;};$('slider').onchange=()=>{dragging=false;level(Number($('slider').value));};
-for(const event of ['pointerup','pointercancel','touchend','touchcancel','keyup'])$('slider').addEventListener(event,()=>setTimeout(()=>{if(dragging){dragging=false;render();}},0));$('power').onclick=()=>change('/api/power',{side:selected,on:!sides.find(s=>s.side===selected).power});$('unit-f').onclick=()=>selectUnit('F');$('unit-c').onclick=()=>selectUnit('C');refresh();
+for(const event of ['pointerup','pointercancel','touchend','touchcancel','keyup'])$('slider').addEventListener(event,()=>setTimeout(()=>{if(dragging){dragging=false;render();}},0));$('power').onclick=()=>change('/api/power',{side:selected,on:!sides.find(s=>s.side===selected).power});$('unit-off').onclick=()=>applyTemperature('off',true);$('unit-f').onclick=()=>applyTemperature('F',true);$('unit-c').onclick=()=>applyTemperature('C',true);refresh();
 function setSettingsOpen(open){$('settings-panel').hidden=!open;$('settings-toggle').setAttribute('aria-expanded',String(open));}
 $('settings-toggle').addEventListener('click',()=>setSettingsOpen($('settings-panel').hidden));
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('settings-panel').hidden){setSettingsOpen(false);$('settings-toggle').focus();}});

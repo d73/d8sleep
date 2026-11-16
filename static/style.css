@@ -152,8 +152,7 @@ main{padding-top:16px}.card-identity{display:flex;align-items:center;gap:10px;mi
 .accent-options{display:flex;align-items:center;gap:8px}
 .accent-choice{width:28px;height:28px;border:2px solid transparent;border-radius:50%;cursor:pointer}
 .accent-choice[aria-pressed=true]{outline:2px solid currentColor;outline-offset:2px}
-.accent-blue{background:#3974b8;color:#3974b8}.accent-teal{background:#2a7e7b;color:#2a7e7b}.accent-violet{background:#695c91;color:#695c91}
-.settings-row input[type=checkbox]{width:20px;height:20px;accent-color:var(--app-accent,#695c91);cursor:pointer}
+.accent-blue{background:#3974b8;color:#3974b8}.accent-teal{background:#217571;color:#217571}.accent-amber{background:#925100;color:#925100}.accent-rose{background:#ad3859;color:#ad3859}.accent-plum{background:#695c91;color:#695c91}
 
 /* Day mode applies to the main card and both detail panels. */
 :root[data-theme=day]{color-scheme:light;background:#f0f3f9;color:#1e2737}
@@ -184,12 +183,17 @@ main{padding-top:16px}.card-identity{display:flex;align-items:center;gap:10px;mi
 :root[data-theme=day] .chart-point{fill:#62517f}
 
 /* The chosen accent affects selection highlights, not temperature data colors. */
-:root{--app-accent:#695c91}
-:root[data-theme=day]{--app-accent:#62517f}
+:root{--app-accent:#3974b8}
 :root[data-accent=blue]{--app-accent:#3974b8}
-:root[data-accent=teal]{--app-accent:#2a7e7b}
+:root[data-accent=teal]{--app-accent:#217571}
+:root[data-accent=amber]{--app-accent:#925100}
+:root[data-accent=rose]{--app-accent:#ad3859}
+:root[data-accent=plum]{--app-accent:#695c91}
 :root[data-theme] .unit-switch .unit[aria-pressed=true],
 :root[data-theme] .sides button.active,
 :root[data-theme] .tab.active,
 :root[data-theme] .tab[aria-expanded=true],
 :root[data-theme] .choices em.on{background:var(--app-accent);border-color:var(--app-accent);color:#fff}
+:root[data-theme] .settings-toggle,:root[data-theme] .power[aria-pressed=false]{border-color:var(--app-accent)}
+:root[data-theme] .chart-line{stroke:var(--app-accent)}
+:root[data-theme] .chart-point{fill:var(--app-accent)}
