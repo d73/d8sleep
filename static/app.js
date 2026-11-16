@@ -157,19 +157,29 @@ function renderHeartChart(samples){
   const detail=document.createElement('p');detail.className='heart-chart-detail';detail.setAttribute('aria-live','polite');
   const hint='Hover, tap, or use arrow keys to inspect a sample.';detail.textContent=hint;
   const selectedPoint=node('circle',{r:4.5,class:'chart-selected-point',visibility:'hidden'});svg.append(selectedPoint);
-  let selectedIndex=0;
+  svg.append(node('rect',{x:0,y:0,width:320,height:160,fill:'transparent'}));
+  let selectedIndex=-1;
   function showPoint(index){
+    if(index===selectedIndex)return;
     selectedIndex=index;const point=points[index];
     selectedPoint.setAttribute('cx',String(x(point.time)));selectedPoint.setAttribute('cy',String(y(point.value)));selectedPoint.setAttribute('visibility','visible');
     detail.textContent=`${point.value} bpm · ${new Date(point.time).toLocaleString()}`;
   }
-  for(let i=0;i<points.length;i++){
-    const hit=node('circle',{cx:x(points[i].time),cy:y(points[i].value),r:8,class:'chart-hit'});
-    hit.addEventListener('mouseenter',()=>showPoint(i));hit.addEventListener('click',()=>showPoint(i));svg.append(hit);
+  function selectAtPointer(event){
+    const rect=svg.getBoundingClientRect();if(!rect.width)return;
+    const position=(event.clientX-rect.left)*320/rect.width;
+    const fraction=Math.max(0,Math.min(1,(position-36)/274));
+    const time=first+(last-first)*fraction;
+    let lo=0,hi=points.length-1;
+    while(lo<hi){const mid=Math.floor((lo+hi)/2);if(points[mid].time<time)lo=mid+1;else hi=mid;}
+    const index=lo>0 && time-points[lo-1].time<=points[lo].time-time?lo-1:lo;
+    showPoint(index);
   }
-  svg.addEventListener('focus',()=>showPoint(selectedIndex));
+  svg.addEventListener('pointermove',selectAtPointer);
+  svg.addEventListener('click',selectAtPointer);
+  svg.addEventListener('focus',()=>showPoint(Math.max(0,selectedIndex)));
   svg.addEventListener('keydown',event=>{
-    let next=selectedIndex;
+    let next=Math.max(0,selectedIndex);
     if(event.key==='ArrowRight')next=Math.min(points.length-1,next+1);
     else if(event.key==='ArrowLeft')next=Math.max(0,next-1);
     else if(event.key==='Home')next=0;
