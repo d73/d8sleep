@@ -15,7 +15,7 @@ applyTheme(savedTheme);
 $('theme-day').addEventListener('click', () => applyTheme('day', true));
 $('theme-night').addEventListener('click', () => applyTheme('night', true));
 let sides = [], selected = null, unit = 'F', busy = false, levelRunning = false, queuedLevel = null, dragging = false, deviceData = null, sessionData = null, sessionSide = null;
-let statusRequests = 0, statusAvailable = false;
+let statusAvailable = false;
 // Only side labels are cached; controls remain disabled until fresh status arrives.
 const SIDE_CACHE = 'd8sleep.side-labels';
 function restoreSidePlaceholders() {
@@ -38,6 +38,15 @@ function rememberSideLabels() {
   } catch { /* Storage is optional. */ }
 }
 restoreSidePlaceholders();
+// Restore wording only; startup keeps the power control disabled until status arrives.
+const POWER_LABEL_CACHE = 'd8sleep.power-label';
+function restorePowerLabel(){
+  try{const label=sessionStorage.getItem(POWER_LABEL_CACHE);if(label==='On'||label==='Off')$('power').textContent=label;}catch{}
+}
+function rememberPowerLabel(power){
+  try{if(power===true||power===false)sessionStorage.setItem(POWER_LABEL_CACHE,power?'On':'Off');else sessionStorage.removeItem(POWER_LABEL_CACHE);}catch{}
+}
+restorePowerLabel();
 document.querySelectorAll('#slider,#power').forEach(x=>x.disabled=true);
 // Approximate community-derived mapping; levels are not thermometer readings.
 const points = [[-100,55],[-90,61],[-58,68],[-17,77],[1,81],[17,86],[44,95],[72,104],[92,110],[100,111]];
@@ -48,7 +57,14 @@ function colorSlider(n){ const t=(Math.max(-10,Math.min(10,n))+10)/20; const rgb
 function selectUnit(next){ unit=next; $('unit-f').setAttribute('aria-pressed',String(unit==='F')); $('unit-c').setAttribute('aria-pressed',String(unit==='C')); render(); }
 function showCurrent(raw){const marker=$('current-marker');marker.hidden=!Number.isFinite(raw);if(!marker.hidden){const fraction=(Math.max(-100,Math.min(100,raw))+100)/200;marker.style.left=`calc(${fraction*100}% + ${16-32*fraction}px)`;}}
 function displayLevel(raw){const n=raw/10;return (n>0?'+':'')+n.toFixed(1).replace(/\.0$/,'');}
-function render(){ renderLive(); renderSession(); const item=sides.find(x=>x.side===selected); if(!item)return; rememberSideLabels(); $('sides').hidden=sides.length<2; $('sides').replaceChildren(); if(sides.length>1) for(const s of sides){const b=document.createElement('button');b.textContent=s.side[0].toUpperCase()+s.side.slice(1);b.className=s.side===selected?'active':'';b.disabled=busy;b.onclick=()=>{selected=s.side;sessionRequest++;sessionInFlight=null;sessionData=null;sessionSide=null;render();void pollSession();};$('sides').append(b);} const level=Number.isInteger(item.target)?item.target:null; if(!dragging){$('value').textContent=level===null?'—':displayLevel(level); $('slider').value=level===null?0:Math.round(level/10);colorSlider(Number($('slider').value));} $('current').textContent=Number.isInteger(item.current)?displayLevel(item.current):''; showCurrent(item.power===false?null:item.current); syncCurrentDetail(); const estimated=degrees(dragging ? Number($('slider').value)*10 : level); $('estimate').textContent=estimated==='—'?'—':`~${estimated}`; $('power').textContent=item.power===null?'Power unavailable':item.power?'On':'Off'; $('power').setAttribute('aria-pressed',String(item.power===true)); $('power').disabled=busy || item.power===null; for(const x of document.querySelectorAll('#slider'))x.disabled=(busy && !levelRunning) || level===null; }
+function syncSliderAvailability(item, level){
+  const slider=$('slider'), off=item.power===false;
+  slider.disabled=off || (busy && !levelRunning) || level===null;
+  slider.dataset.off=String(off);
+  slider.setAttribute('aria-describedby',off?'current-level-help slider-off-help':'current-level-help');
+  slider.title=off?'Turn on to adjust the heating level':'';
+}
+function render(){ renderLive(); renderSession(); const item=sides.find(x=>x.side===selected); if(!item)return; rememberSideLabels(); $('sides').hidden=sides.length<2; $('sides').replaceChildren(); if(sides.length>1) for(const s of sides){const b=document.createElement('button');b.textContent=s.side[0].toUpperCase()+s.side.slice(1);b.className=s.side===selected?'active':'';b.disabled=busy;b.onclick=()=>{selected=s.side;sessionRequest++;sessionInFlight=null;sessionData=null;sessionSide=null;render();void pollSession();};$('sides').append(b);} const level=Number.isInteger(item.target)?item.target:null; if(!dragging){$('value').textContent=level===null?'—':displayLevel(level); $('slider').value=level===null?0:Math.round(level/10);colorSlider(Number($('slider').value));} $('current').textContent=Number.isInteger(item.current)?displayLevel(item.current):''; showCurrent(item.power===false?null:item.current); syncCurrentDetail(); const estimated=degrees(dragging ? Number($('slider').value)*10 : level); $('estimate').textContent=estimated==='—'?'—':`~${estimated}`; $('power').textContent=item.power===null?'Power unavailable':item.power?'On':'Off'; rememberPowerLabel(item.power); $('power').setAttribute('aria-pressed',String(item.power===true)); $('power').disabled=busy || item.power===null; syncSliderAvailability(item,level); }
 function choiceList(options,current){
   const chips=document.createElement('div');chips.className='choices';
   const list=options.slice();if(current!==null&&current!==undefined&&!list.some(o=>o[0]===current))list.push([current,String(current)]);
@@ -144,8 +160,8 @@ async function pollDevice(){
 }
 // Device diagnostics refresh when the panel opens, rather than on a timer.
 void pollDevice();
-function syncCurrentDetail(){const item=sides.find(s=>s.side===selected);$('current-detail').hidden=statusRequests>0 || !statusAvailable || !item || item.power===false || !Number.isInteger(item.current);}
-async function readStatus(){statusRequests++;syncCurrentDetail();try{return await api('/api/status');}catch(e){statusAvailable=false;throw e;}finally{statusRequests--;syncCurrentDetail();}}
+function syncCurrentDetail(){const item=sides.find(s=>s.side===selected);$('current-detail').hidden=!statusAvailable || !item || item.power===false || !Number.isInteger(item.current);}
+async function readStatus(){try{return await api('/api/status');}catch(e){statusAvailable=false;syncCurrentDetail();throw e;}}
 function update(data){statusAvailable=true;if(data.pod_name)$('pod-name').textContent=data.pod_name;const previous=selected;sides=data.sides;if(!sides.some(s=>s.side===selected))selected=sides[0]?.side;if(selected!==previous){sessionRequest++;sessionInFlight=null;sessionData=null;sessionSide=null;void pollSession();}syncCurrentDetail();render();say('',true);}
 async function refresh(){try{update(await readStatus());}catch(e){say(e.message);}}
 let polling=false, revision=0;
@@ -157,7 +173,7 @@ async function refreshAfterError(){try{const data=await readStatus();sides=data.
 function level(n){
   if(busy && !levelRunning)return;
   const raw=Math.max(-10,Math.min(10,n))*10, item=sides.find(s=>s.side===selected);
-  if(!item)return;
+  if(!item || item.power===false)return;
   revision++; item.target=raw;
   queuedLevel={side:selected,level:raw};
   busy=true; levelRunning=true; render(); say('Updating…',true);
@@ -186,7 +202,7 @@ async function sendLevels(){
     levelSending=false; levelRunning=false; busy=false; render();
   }
 }
-$('slider').oninput=()=>{dragging=true;colorSlider(Number($('slider').value));$('value').textContent=displayLevel(Number($('slider').value)*10);$('estimate').textContent=`~${degrees(Number($('slider').value)*10)}`;};$('slider').onchange=()=>{dragging=false;level(Number($('slider').value));};
+$('slider').oninput=()=>{if($('slider').disabled)return;dragging=true;colorSlider(Number($('slider').value));$('value').textContent=displayLevel(Number($('slider').value)*10);$('estimate').textContent=`~${degrees(Number($('slider').value)*10)}`;};$('slider').onchange=()=>{dragging=false;level(Number($('slider').value));};
 for(const event of ['pointerup','pointercancel','touchend','touchcancel','keyup'])$('slider').addEventListener(event,()=>setTimeout(()=>{if(dragging){dragging=false;render();}},0));$('power').onclick=()=>change('/api/power',{side:selected,on:!sides.find(s=>s.side===selected).power});$('unit-f').onclick=()=>selectUnit('F');$('unit-c').onclick=()=>selectUnit('C');refresh();
 // Drawers: Pod status slides out left of the control, session biometrics right. Escape, backdrop or × closes.
 function setDrawer(id,open){const d=$(id);d.classList.toggle('open',open);d.setAttribute('aria-hidden',String(!open));const tab=id==='drawer-status'?$('tab-status'):$('tab-session');tab.setAttribute('aria-expanded',String(open));tab.classList.toggle('active',open);const any=document.querySelector('.drawer.open');$('drawer-backdrop').hidden=!any;if(open&&id==='drawer-status')void pollDevice();}
