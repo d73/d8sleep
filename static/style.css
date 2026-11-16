@@ -110,6 +110,8 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border:3px solid #f0f
 
 /* Panel triggers sit on the card edges and stay inside the viewport. */
 .tabs{position:absolute;inset:0;z-index:3;display:block;margin:0;pointer-events:none}
+.control-body{position:relative}
+.control-body .tabs{inset:-22px}
 .tab{position:absolute;top:50%;transform:translateY(-50%);writing-mode:vertical-rl;min-width:36px;min-height:90px;padding:12px 7px;background:#252c38;border:1px solid #303645;color:#aeb5c3;font-size:12px;line-height:1;pointer-events:auto;cursor:pointer}
 #tab-status{left:0;border-left:0;border-radius:10px 0 0 10px;transform:translateY(-50%) rotate(180deg);border-right:0;border-left:1px solid #303645}
 #tab-session{right:0;border-right:0;border-radius:10px 0 0 10px}
