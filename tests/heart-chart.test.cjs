@@ -266,3 +266,8 @@ test('pressing on the colour swatch or on a read-only list does not start a drag
   locked.ids['chart-colors'].children[0].handlers.pointerdown({ button: 0, target: { closest: () => null }, preventDefault() { throw Error('read-only'); } });
   assert.equal(locked.docHandlers.pointermove, undefined);
 });
+
+test('saved preferences are requested when the page starts', () => {
+  // Regression: an edit once dropped the startup call, so colors, indicators and order were saved but never loaded.
+  assert.match(source, /^void loadChartPrefs\(\);\r?$/m);
+});

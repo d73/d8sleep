@@ -396,3 +396,5 @@ for(const d of document.querySelectorAll('.drawer'))d.setAttribute('aria-hidden'
 $('chart-colors-btn').onclick=()=>toggleColorPopover('chart-colors','chart-colors-btn',renderChartColors);
 $('stage-colors-btn').onclick=()=>toggleColorPopover('stage-colors','stage-colors-btn',renderStageColors);
 document.addEventListener('click',event=>{if(event.target.closest&&event.target.closest('#chart-colors,#stage-colors,#chart-colors-btn,#stage-colors-btn'))return;closeColorPopovers();});
+// Load the saved chart preferences (colors, indicators, order, stage colors) once the page is ready.
+void loadChartPrefs();
