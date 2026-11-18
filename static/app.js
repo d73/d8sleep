@@ -109,7 +109,7 @@ function renderLive(){
   const mode=modeLabels[side?.mode]||side?.mode||'—';
   const active=card('Active state');
   line(active,side?.power===false?'Off':side?.power===true?`On · ${mode}`:'Power unknown',side?.power===true?'bento-value active':'bento-value');
-  const powerChoices=choiceList([[true,'On'],[false,'Off']],typeof side?.power==='boolean'?side.power:null);powerChoices.setAttribute('role','group');powerChoices.setAttribute('aria-label','Power states');active.append(powerChoices);
+  const powerChoices=choiceList([[false,'Off'],[true,'On']],typeof side?.power==='boolean'?side.power:null);powerChoices.setAttribute('role','group');powerChoices.setAttribute('aria-label','Power states');active.append(powerChoices);
   const modeChoices=choiceList(modes,side?.mode||null);modeChoices.setAttribute('role','group');modeChoices.setAttribute('aria-label','Known modes');active.append(modeChoices);
   line(active,`Started ${when(side?.mode_started)} · Side: ${side?.side?side.side.charAt(0).toUpperCase()+side.side.slice(1):'—'}`,'bento-subtext');hero.append(active);
   const thermal=card('Thermal');line(thermal,level(side?.target),'bento-value');
