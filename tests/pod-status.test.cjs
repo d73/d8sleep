@@ -33,7 +33,7 @@ const side = { side: 'left', power: true, mode: 'smart:initial', mode_started: '
 
 test('top strip, side heading and thermal running state', () => {
   const ids = render(device, side);
-  assert.deepEqual(ids['status-strip'].children.map(c => texts(c).join(' ')), ['Online', 'Water', 'Firmware 14b0601']);
+  assert.deepEqual(ids['status-strip'].children.map(c => texts(c).join(' ')), ['Online', 'Water']);   // firmware moved to the hardware card
   assert.equal(ids['pod-side-heading'].textContent, 'This side · Left');
   assert.match(texts(ids['live-status']).join('|'), /Currently -2 · Running: Yes/);
 });
@@ -48,14 +48,16 @@ test('schedule presets and hardware are grouped rows of label-over-value cells',
   assert.deepEqual(cells(smart), ['Bedtime/-2', 'Early sleep/-3', 'Late sleep/-1']);
   assert.equal(smart.children[1].style.props['--cols'], '3');
   assert.deepEqual(cells(timed), ['Timed level/1', 'Duration/2h 00m']);       // not raw seconds
-  assert.equal(timed.children[1].style.props['--cols'], '2');
+  assert.equal(timed.children[1].style.props['--cols'], '3');                  // Duration lines up under Early sleep
   assert.equal(water.children[0].textContent, 'Water & priming');
   assert.equal(cells(water).length, 3);
   assert.deepEqual(cells(water).slice(0, 2), ['Priming/Not running', 'Needs priming/No']);
   assert.match(cells(water)[2], /^Last primed\/Nov 1[45]/);
   assert.equal(link.children[0].textContent, 'Connectivity & firmware');
-  assert.deepEqual(cells(link).map(c => c.split('/')[0]), ['Last heard', 'Firmware updating']);
-  assert.equal(cells(link)[1], 'Firmware updating/No');
+  assert.deepEqual(cells(link).map(c => c.split('/')[0]), ['Last heard', 'Firmware', 'Firmware updating']);
+  assert.equal(cells(link)[1], 'Firmware/14b0601');
+  assert.equal(cells(link)[2], 'Firmware updating/No');
+  assert.equal(link.children[1].style.props['--cols'], '3');
 });
 
 test('missing device data shows dashes instead of failing', () => {
@@ -63,5 +65,6 @@ test('missing device data shows dashes instead of failing', () => {
   const [presets, hardware] = ids['live-details'].children;
   assert.deepEqual(cells(rows(presets)[1]), ['Timed level/—', 'Duration/—']);
   assert.deepEqual(cells(rows(hardware)[0]), ['Priming/—', 'Needs priming/—', 'Last primed/—']);
-  assert.equal(ids['status-strip'].children.length, 3);
+  assert.equal(ids['status-strip'].children.length, 2);
+  assert.equal(cells(rows(hardware)[1])[1], 'Firmware/—');
 });

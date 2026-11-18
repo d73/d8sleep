@@ -102,7 +102,6 @@ function renderLive(){
   const tag=(text,state)=>{const item=document.createElement('span'),dot=document.createElement('i'),label=document.createElement('span');item.className='status-tag';dot.className=state===true?'status-tag-dot good':state===false?'status-tag-dot bad':'status-tag-dot';dot.setAttribute('aria-hidden','true');label.textContent=text;item.append(dot,label);strip.append(item);};
   tag(yesNo(d?.online,'Online','Offline')==='—'?'Connection unknown':yesNo(d?.online,'Online','Offline'),d?.online);
   tag(yesNo(d?.hasWater,'Water','Water low / absent')==='—'?'Water unknown':yesNo(d?.hasWater,'Water','Water low / absent'),d?.hasWater);
-  const fw=document.createElement('span');fw.className='status-firmware';fw.textContent=`Firmware ${d?.firmwareVersion||'—'}`;strip.append(fw);
   $('pod-side-heading').textContent=side?.side?`This side · ${side.side.charAt(0).toUpperCase()+side.side.slice(1)}`:'This side';
   const card=(title)=>{const box=document.createElement('div'),label=document.createElement('span');box.className='bento-card';label.className='bento-label';label.textContent=title;box.append(label);return box;};
   const line=(box,value,cls)=>{const text=document.createElement('span');text.className=cls;text.textContent=value;box.append(text);};
@@ -120,16 +119,16 @@ function renderLive(){
   const schedule=choiceList([['smart','Smart'],['timeBased','Timed']],side?.schedule_type||null);schedule.setAttribute('role','group');schedule.setAttribute('aria-label','Schedule types');thermal.append(schedule);hero.append(thermal);
   // Grouped cards: each group has titled rows, and each row is a grid of label-over-value cells.
   const section=(title)=>{const group=document.createElement('section'),heading=document.createElement('h3'),body=document.createElement('div');heading.className='pod-section-heading';heading.textContent=title;body.className='pod-group';group.append(heading,body);details.append(group);return body;};
-  const row=(parent,title,cells)=>{const item=document.createElement('div'),name=document.createElement('span'),grid=document.createElement('div');
-    item.className='pod-row';name.className='pod-row-title';name.textContent=title;grid.className='pod-kv-grid';grid.style.setProperty('--cols',String(cells.length));
+  const row=(parent,title,cells,columns=cells.length)=>{const item=document.createElement('div'),name=document.createElement('span'),grid=document.createElement('div');
+    item.className='pod-row';name.className='pod-row-title';name.textContent=title;grid.className='pod-kv-grid';grid.style.setProperty('--cols',String(columns));
     for(const [label,value] of cells){const cell=document.createElement('div'),key=document.createElement('span'),text=document.createElement('strong');cell.className='pod-kv';key.textContent=label;text.textContent=value;cell.append(key,text);grid.append(cell);}
     item.append(name,grid);parent.append(item);};
   const presets=section('Schedule presets');
   row(presets,'Smart schedule',[['Bedtime',level(side?.smart?.bedTimeLevel)],['Early sleep',level(side?.smart?.initialSleepLevel)],['Late sleep',level(side?.smart?.finalSleepLevel)]]);
-  row(presets,'Timed mode',[['Timed level',level(side?.timed?.level)],['Duration',formatDuration(side?.timed?.durationSeconds)]]);
+  row(presets,'Timed mode',[['Timed level',level(side?.timed?.level)],['Duration',formatDuration(side?.timed?.durationSeconds)]],3); // same 3 columns as Smart schedule, so Duration sits under Early sleep
   const hardware=section('Pod hardware & system');
   row(hardware,'Water & priming',[['Priming',yesNo(d?.priming,'In progress','Not running')],['Needs priming',yesNo(d?.needsPriming)],['Last primed',whenShort(d?.lastPrime)]]);
-  row(hardware,'Connectivity & firmware',[['Last heard',whenShort(d?.lastHeard)],['Firmware updating',yesNo(d?.firmwareUpdating)]]);
+  row(hardware,'Connectivity & firmware',[['Last heard',whenShort(d?.lastHeard)],['Firmware',d?.firmwareVersion||'—'],['Firmware updating',yesNo(d?.firmwareUpdating)]]);
 }
 let sessionRequest=0, sessionInFlight=null, sessionCheckedAt=null;
 // --- Session summary ---
