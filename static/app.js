@@ -72,7 +72,22 @@ document.querySelectorAll('#slider,#power').forEach(x=>x.disabled=true);
 const points = [[-100,55],[-90,61],[-58,68],[-17,77],[1,81],[17,86],[44,95],[72,104],[92,110],[100,111]];
 function degrees(level) { if (typeof level !== 'number' || level < -100 || level > 100) return '—'; let f=points[0][1]; for(let i=1;i<points.length;i++){ const [x,y]=points[i], [px,py]=points[i-1]; if(level<=x){f=py+(y-py)*(level-px)/(x-px);break;} } return `${Math.round(unit==='F'?f:(f-32)*5/9)}°${unit}`; }
 function say(text, online=false){ $('message').textContent=text; $('connection').textContent=online?'Connected':'Needs attention'; $('connection').classList.toggle('online',online); }
-async function api(path, body){ let response; try {response=await fetch(path, body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{cache:'no-store'});} catch {throw Error('Can’t reach d8sleep. Check your connection.');} const data=await response.json(); if(!response.ok) {const error=Error(data.error || 'Something went wrong.'); error.status=response.status;throw error;} return data; }
+// GET when there is no body, otherwise POST JSON. Errors carry the HTTP status.
+async function api(path, body) {
+  let response;
+  try {
+    response = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store' });
+  } catch {
+    throw Error('Can’t reach d8sleep. Check your connection.');
+  }
+  const data = await response.json();
+  if (!response.ok) {
+    const error = Error(data.error || 'Something went wrong.');
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
 function colorSlider(n){ const t=(Math.max(-10,Math.min(10,n))+10)/20; const rgb=[Math.round(91+151*t),Math.round(159-57*t),Math.round(238-121*t)]; const color=`rgb(${rgb.join(' ')})`; $('slider').style.setProperty('--slider-color',color); $('target-circle').style.setProperty('--slider-color',color); }
 
 function showCurrent(raw){const marker=$('current-marker');marker.hidden=!Number.isFinite(raw);if(!marker.hidden){const fraction=(Math.max(-100,Math.min(100,raw))+100)/200;marker.style.left=`calc(${fraction*100}% + ${16-32*fraction}px)`;}}
@@ -85,7 +100,53 @@ function syncSliderAvailability(item, level){
   slider.setAttribute('aria-describedby',off?'current-level-help slider-off-help':'current-level-help');
   slider.title=readOnly?'Read-only on this device':off?'Turn on to adjust the heating level':'';
 }
-function render(){ renderLive(); renderSession(); const item=sides.find(x=>x.side===selected); if(!item)return; rememberSideLabels(); $('sides').hidden=sides.length<2; $('sides').replaceChildren(); if(sides.length>1) for(const s of sides){const b=document.createElement('button');b.textContent=s.side[0].toUpperCase()+s.side.slice(1);b.className=s.side===selected?'active':'';b.disabled=busy;b.onclick=()=>{selected=s.side;sessionRequest++;sessionInFlight=null;sessionData=null;sessionSide=null;nightIndex=0;render();void pollSession();};$('sides').append(b);} const level=Number.isInteger(item.target)?item.target:null; if(!dragging){$('value').textContent=level===null?'—':displayLevel(level); $('slider').value=level===null?0:Math.round(level/10);colorSlider(Number($('slider').value));} $('current').textContent=Number.isInteger(item.current)?displayLevel(item.current):''; showCurrent(item.power===false?null:item.current); syncCurrentDetail(); const estimated=degrees(dragging ? Number($('slider').value)*10 : level); $('estimate').textContent=estimated==='—'?'—':`~${estimated}`; $('power').textContent=item.power===null?'Power unavailable':item.power?'On':'Off'; rememberPowerLabel(item.power); $('power').setAttribute('aria-pressed',String(item.power===true)); $('power').disabled=readOnly || busy || item.power===null; $('power').title=readOnly?'Read-only on this device':''; syncSliderAvailability(item,level); }
+function render() {
+  renderLive();
+  renderSession();
+  const item = sides.find(x => x.side === selected);
+  if (!item) return;
+  rememberSideLabels();
+  renderSideButtons();
+  const level = Number.isInteger(item.target) ? item.target : null;
+  if (!dragging) {
+    $('value').textContent = level === null ? '—' : displayLevel(level);
+    $('slider').value = level === null ? 0 : Math.round(level / 10);
+    colorSlider(Number($('slider').value));
+  }
+  $('current').textContent = Number.isInteger(item.current) ? displayLevel(item.current) : '';
+  showCurrent(item.power === false ? null : item.current);
+  syncCurrentDetail();
+  const estimated = degrees(dragging ? Number($('slider').value) * 10 : level);
+  $('estimate').textContent = estimated === '—' ? '—' : `~${estimated}`;
+  $('power').textContent = item.power === null ? 'Power unavailable' : item.power ? 'On' : 'Off';
+  rememberPowerLabel(item.power);
+  $('power').setAttribute('aria-pressed', String(item.power === true));
+  $('power').disabled = readOnly || busy || item.power === null;
+  $('power').title = readOnly ? 'Read-only on this device' : '';
+  syncSliderAvailability(item, level);
+}
+/** Left / Right buttons, shown only when the Pod has more than one side. */
+function renderSideButtons() {
+  $('sides').hidden = sides.length < 2;
+  $('sides').replaceChildren();
+  if (sides.length < 2) return;
+  for (const s of sides) {
+    const button = document.createElement('button');
+    button.textContent = s.side[0].toUpperCase() + s.side.slice(1);
+    button.className = s.side === selected ? 'active' : '';
+    button.disabled = busy;
+    button.onclick = () => { selected = s.side; resetSessionView(); render(); void pollSession(); };
+    $('sides').append(button);
+  }
+}
+/** Forget the loaded session so a different side starts from its newest night. */
+function resetSessionView() {
+  sessionRequest++;
+  sessionInFlight = null;
+  sessionData = null;
+  sessionSide = null;
+  nightIndex = 0;
+}
 function choiceList(options,current){
   const chips=document.createElement('div');chips.className='choices';
   const list=options.slice();if(current!==null&&current!==undefined&&!list.some(o=>o[0]===current))list.push([current,String(current)]);
@@ -141,7 +202,15 @@ function dayLabel(value){const ms=Date.parse(value);return Number.isFinite(ms)?n
 function nightLabel(night){const start=dayLabel(night?.sleep_start||night?.start),end=dayLabel(night?.sleep_end||night?.presence_end);if(!start)return 'No session';return end&&end!==start?`${start} – ${end}`:start;}
 function nightList(session){const list=Array.isArray(session?.sessions)&&session.sessions.length?session.sessions:(session?[session]:[]);if(nightIndex>=list.length)nightIndex=Math.max(0,list.length-1);return list;}
 function seriesStats(night,key){const values=(Array.isArray(night?.series?.[key])?night.series[key]:[]).map(p=>p&&p.value).filter(v=>typeof v==='number'&&Number.isFinite(v));if(!values.length)return null;let min=Infinity,max=-Infinity,sum=0;for(const v of values){min=Math.min(min,v);max=Math.max(max,v);sum+=v;}return {avg:sum/values.length,min,max};}
-function summaryParts(key,suffix,stats){if(!stats)return {avg:'—',range:'No data'};const n=value=>isTempStream(key)?String(Math.round(chartNumber(key,value))):key==='respiratoryRate'?chartNumber(key,value).toFixed(1):String(Math.round(value));const tail=isTempStream(key)?`°${unit==='F'?'F':'C'}`:suffix;const rangeTail=isTempStream(key)?'°':'';return {avg:`${n(stats.avg)}${tail}`,range:`${n(stats.min)}–${n(stats.max)}${rangeTail}`};}
+function summaryParts(key, suffix, stats) {
+  if (!stats) return { avg: '—', range: 'No data' };
+  const format = value => isTempStream(key) ? String(Math.round(chartNumber(key, value)))
+    : key === 'respiratoryRate' ? chartNumber(key, value).toFixed(1)
+    : String(Math.round(value));
+  const unitTail = isTempStream(key) ? `°${unit === 'F' ? 'F' : 'C'}` : suffix;
+  const rangeTail = isTempStream(key) ? '°' : '';
+  return { avg: `${format(stats.avg)}${unitTail}`, range: `${format(stats.min)}–${format(stats.max)}${rangeTail}` };
+}
 function stageTotals(night){const totals={deep:0,rem:0,light:0,awake:0};for(const s of Array.isArray(night?.stages)?night.stages:[])if(s&&s.stage in totals&&Number.isFinite(s.duration))totals[s.stage]+=s.duration;return totals;}
 function renderNightSwitcher(list){
   const box=$('night-switcher'),signature=JSON.stringify([selected,list.map(n=>[n?.start,n?.sleep_start,n?.sleep_end,n?.presence_end])]);
@@ -154,7 +223,17 @@ function renderNightSwitcher(list){
   list.forEach((night,index)=>{const option=document.createElement('option');option.value=String(index);option.textContent=uniqueLabel(index);option.selected=index===nightIndex;choices.append(option);});
   const commit=()=>{const index=Number(choices.value);if(!Number.isInteger(index)||index<0||index>=list.length)return;nightIndex=index;menu.open=false;renderSession();box.querySelector?.('summary')?.focus();};
   choices.addEventListener('change',commit);
-  choices.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();menu.open=false;label.focus();return;}if(event.key==='Enter'||event.key===' '){event.preventDefault();commit();return;}const steps={ArrowUp:-1,ArrowDown:1,PageUp:-10,PageDown:10};if(event.key in steps||event.key==='Home'||event.key==='End'){event.preventDefault();choices.selectedIndex=event.key==='Home'?0:event.key==='End'?list.length-1:Math.max(0,Math.min(list.length-1,choices.selectedIndex+steps[event.key]));}});
+  const STEPS = { ArrowUp: -1, ArrowDown: 1, PageUp: -10, PageDown: 10 };
+  choices.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.preventDefault(); menu.open = false; label.focus(); return; }
+    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); commit(); return; }
+    // Arrows, Page Up/Down, Home and End move within the list; Enter commits.
+    if (event.key in STEPS || event.key === 'Home' || event.key === 'End') {
+      event.preventDefault();
+      const last = list.length - 1;
+      choices.selectedIndex = event.key === 'Home' ? 0 : event.key === 'End' ? last : Math.max(0, Math.min(last, choices.selectedIndex + STEPS[event.key]));
+    }
+  });
   menu.append(label,choices);box.append(menu);
 }
 document.addEventListener?.('click',event=>{const box=$('night-switcher');if(box&&!box.contains?.(event.target)){const menu=box.querySelector?.('.night-menu');if(menu)menu.open=false;}});
@@ -221,7 +300,25 @@ function chartNumber(key,value){return isTempStream(key)&&unit==='F'?value*9/5+3
 function chartText(key,value){const n=chartNumber(key,value);if(isTempStream(key))return `${Math.round(n)}°${unit==='F'?'F':'C'}`;return key==='respiratoryRate'?n.toFixed(1):String(Math.round(n));}
 function chartPoints(session,key){const raw=session?.series?.[key]??(key==='heartRate'?session?.heart_rate_series:null);return (Array.isArray(raw)?raw:[]).filter(p=>p&&typeof p.value==='number'&&Number.isFinite(p.value)&&typeof p.timestamp==='string'&&Number.isFinite(Date.parse(p.timestamp))).map(p=>({time:Date.parse(p.timestamp),value:p.value})).sort((a,b)=>a.time-b.time);}
 function nearestIndex(list,time,get){let lo=0,hi=list.length-1;while(lo<hi){const mid=Math.floor((lo+hi)/2);if(get(list[mid])<time)lo=mid+1;else hi=mid;}return lo>0&&time-get(list[lo-1])<=get(list[lo])-time?lo-1:lo;}
-function normalizeChartPrefs(raw){const colors={...CHART_DEFAULT_COLORS};for(const [key] of CHART_STREAMS){const value=raw?.colors?.[key];if(typeof value==='string'&&/^#[0-9a-fA-F]{6}$/.test(value))colors[key]=value.toLowerCase();}const known=CHART_STREAMS.map(s=>s[0]);const active=Array.isArray(raw?.active)?known.filter(k=>raw.active.includes(k)):['heartRate'];const stageColors={...STAGE_DEFAULT_COLORS};for(const key of Object.keys(STAGE_DEFAULT_COLORS)){const value=raw?.stageColors?.[key];if(typeof value==='string'&&/^#[0-9a-fA-F]{6}$/.test(value))stageColors[key]=value.toLowerCase();}const wanted=Array.isArray(raw?.order)?raw.order.filter((k,i,all)=>known.includes(k)&&all.indexOf(k)===i):[];const order=[...wanted,...known.filter(k=>!wanted.includes(k))];return {colors,active,stageColors,order};}
+/** Turns whatever the server stored into a complete, valid preferences object. */
+function normalizeChartPrefs(raw) {
+  const HEX = /^#[0-9a-fA-F]{6}$/;
+  const known = CHART_STREAMS.map(s => s[0]);
+  const pickColors = (defaults, given) => {
+    const colors = { ...defaults };
+    for (const key of Object.keys(defaults)) {
+      const value = given?.[key];
+      if (typeof value === 'string' && HEX.test(value)) colors[key] = value.toLowerCase();
+    }
+    return colors;
+  };
+  const colors = pickColors(CHART_DEFAULT_COLORS, raw?.colors);
+  const stageColors = pickColors(STAGE_DEFAULT_COLORS, raw?.stageColors);
+  const active = Array.isArray(raw?.active) ? known.filter(k => raw.active.includes(k)) : ['heartRate'];
+  const wanted = Array.isArray(raw?.order) ? raw.order.filter((k, i, all) => known.includes(k) && all.indexOf(k) === i) : [];
+  const order = [...wanted, ...known.filter(k => !wanted.includes(k))];   // anything left out keeps its default place at the end
+  return { colors, active, stageColors, order };
+}
 function renderSessionChart(session){
   if(session!==undefined)chartSession=session;
   const container=$('heart-chart-content'),readout=$('chart-readout'),chips=$('chart-chips');container.replaceChildren();chips.replaceChildren();readout.textContent='';
@@ -340,7 +437,18 @@ async function pollDevice(){
 void pollDevice();
 function syncCurrentDetail(){const item=sides.find(s=>s.side===selected);$('current-detail').hidden=!statusAvailable || !item || item.power===false || !Number.isInteger(item.current);}
 async function readStatus(){try{return await api('/api/status');}catch(e){statusAvailable=false;syncCurrentDetail();throw e;}}
-function update(data){statusAvailable=true;readOnly=data.readonly===true;if(data.pod_name)$('pod-name').textContent=data.pod_name;const previous=selected;sides=data.sides;if(!sides.some(s=>s.side===selected))selected=sides[0]?.side;if(selected!==previous){sessionRequest++;sessionInFlight=null;sessionData=null;sessionSide=null;nightIndex=0;void pollSession();}syncCurrentDetail();render();say('',true);}
+function update(data) {
+  statusAvailable = true;
+  readOnly = data.readonly === true;
+  if (data.pod_name) $('pod-name').textContent = data.pod_name;
+  const previous = selected;
+  sides = data.sides;
+  if (!sides.some(s => s.side === selected)) selected = sides[0]?.side;
+  if (selected !== previous) { resetSessionView(); void pollSession(); }
+  syncCurrentDetail();
+  render();
+  say('', true);
+}
 async function refresh(){try{update(await readStatus());}catch(e){say(e.message);}}
 let polling=false, revision=0;
 async function pollStatus(){if(document.hidden||busy||dragging||polling)return;polling=true;const atStart=revision;try{const data=await readStatus();if(!busy&&!dragging&&revision===atStart)update(data);}catch(e){if(!busy&&!dragging)say(e.message);}finally{polling=false;}}
@@ -381,7 +489,14 @@ async function sendLevels(){
   }
 }
 $('slider').oninput=()=>{if($('slider').disabled)return;dragging=true;colorSlider(Number($('slider').value));$('value').textContent=displayLevel(Number($('slider').value)*10);$('estimate').textContent=`~${degrees(Number($('slider').value)*10)}`;};$('slider').onchange=()=>{dragging=false;level(Number($('slider').value));};
-for(const event of ['pointerup','pointercancel','touchend','touchcancel','keyup'])$('slider').addEventListener(event,()=>setTimeout(()=>{if(dragging){dragging=false;render();}},0));$('power').onclick=()=>change('/api/power',{side:selected,on:!sides.find(s=>s.side===selected).power});$('unit-off').onclick=()=>applyTemperature('off',true);$('unit-f').onclick=()=>applyTemperature('F',true);$('unit-c').onclick=()=>applyTemperature('C',true);refresh();
+for (const event of ['pointerup', 'pointercancel', 'touchend', 'touchcancel', 'keyup']) {
+  $('slider').addEventListener(event, () => setTimeout(() => { if (dragging) { dragging = false; render(); } }, 0));
+}
+$('power').onclick = () => change('/api/power', { side: selected, on: !sides.find(s => s.side === selected).power });
+$('unit-off').onclick = () => applyTemperature('off', true);
+$('unit-f').onclick = () => applyTemperature('F', true);
+$('unit-c').onclick = () => applyTemperature('C', true);
+refresh();
 function setSettingsOpen(open){$('settings-panel').hidden=!open;$('settings-toggle').setAttribute('aria-expanded',String(open));}
 $('settings-toggle').addEventListener('click',()=>setSettingsOpen($('settings-panel').hidden));
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('settings-panel').hidden){setSettingsOpen(false);$('settings-toggle').focus();}});
