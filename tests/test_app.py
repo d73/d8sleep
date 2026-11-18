@@ -247,7 +247,7 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(data['prefs']['active'], ['heartRate', 'hrv'])
             self.assertEqual(self.get_prefs()[1]['prefs'], data['prefs'])
             self.assertEqual(server.load_prefs(), data['prefs'])  # survives a restart: read from disk
-            for bad in ({'colors': {'heartRate': 'red'}}, {'colors': {'bogus': '#000000'}}, {'active': ['nope']}, {'active': ['hrv', 'hrv']}, {'colors': []}, []):
+            for bad in ({'colors': {'heartRate': 'red'}}, {'colors': {'bogus': '#000000'}}, {'active': ['nope']}, {'active': ['hrv', 'hrv']}, {'active': [{}]}, {'active': [['hrv']]}, {'colors': []}, []):
                 self.assertEqual(self.put(bad)[0], 400, bad)
             self.assertEqual(self.get_prefs()[1]['prefs'], data['prefs'])
             status, data = self.put({'stageColors': {'deep': '#0A0B0C'}})
@@ -258,7 +258,7 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(status, 200)
             self.assertEqual(data['prefs']['order'], ['tempBedC', 'hrv', 'heartRate', 'respiratoryRate', 'tempRoomC'])  # the rest follow in default order
             self.assertEqual(server.load_prefs()['order'], data['prefs']['order'])
-            for bad in ({'order': ['nope']}, {'order': ['hrv', 'hrv']}, {'order': 'hrv'}):
+            for bad in ({'order': ['nope']}, {'order': ['hrv', 'hrv']}, {'order': 'hrv'}, {'order': [{}]}, {'order': [['hrv']]}):
                 self.assertEqual(self.put(bad)[0], 400, bad)
             for bad in ({'stageColors': {'deep': 'blue'}}, {'stageColors': {'bogus': '#000000'}}, {'stageColors': []}):
                 self.assertEqual(self.put(bad)[0], 400, bad)
@@ -278,6 +278,10 @@ class ServerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp) / 'prefs.json'
             path.write_text('{not json', encoding='utf-8')
+            self.assertEqual(server.load_prefs(path), server.clean_prefs({}))
+            path.write_text('{"active": [{}]}', encoding='utf-8')
+            self.assertEqual(server.load_prefs(path), server.clean_prefs({}))
+            path.write_text('{"order": [["hrv"]]}', encoding='utf-8')
             self.assertEqual(server.load_prefs(path), server.clean_prefs({}))
 
     def test_rejects_cross_origin(self):

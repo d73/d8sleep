@@ -77,10 +77,12 @@ def clean_prefs(data):
             raise ValueError('Colors must be #rrggbb values for the known indicators.')
         colors[key] = value.lower()
     active = data.get('active', DEFAULT_PREFS['active'])
-    if not isinstance(active, list) or len(set(active)) != len(active) or any(a not in STREAMS for a in active):
+    if (not isinstance(active, list) or any(not isinstance(a, str) or a not in STREAMS for a in active)
+            or len(set(active)) != len(active)):
         raise ValueError('Active indicators must be a list of known, distinct indicators.')
     order = data.get('order', list(STREAMS))
-    if not isinstance(order, list) or len(set(order)) != len(order) or any(o not in STREAMS for o in order):
+    if (not isinstance(order, list) or any(not isinstance(o, str) or o not in STREAMS for o in order)
+            or len(set(order)) != len(order)):
         raise ValueError('Order must be a list of known, distinct indicators.')
     order = order + [s for s in STREAMS if s not in order]  # anything left out keeps its default place at the end
     stage_colors = dict(DEFAULT_STAGE_COLORS)
