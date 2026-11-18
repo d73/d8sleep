@@ -18,7 +18,7 @@ STREAMS = ('heartRate', 'hrv', 'tempBedC', 'respiratoryRate', 'tempRoomC')
 DEFAULT_COLORS = {'heartRate': '#e57373', 'hrv': '#64b5f6', 'tempBedC': '#ffb74d', 'respiratoryRate': '#4db6ac', 'tempRoomC': '#9575cd'}
 STAGES = ('deep', 'rem', 'light', 'awake')
 DEFAULT_STAGE_COLORS = {'deep': '#5c6bc0', 'rem': '#ba68c8', 'light': '#4fc3f7', 'awake': '#ffb74d'}
-DEFAULT_PREFS = {'colors': dict(DEFAULT_COLORS), 'active': ['heartRate'], 'stageColors': dict(DEFAULT_STAGE_COLORS)}
+DEFAULT_PREFS = {'colors': dict(DEFAULT_COLORS), 'active': ['heartRate'], 'stageColors': dict(DEFAULT_STAGE_COLORS), 'order': list(STREAMS)}
 client = None
 
 def load_env():
@@ -79,6 +79,10 @@ def clean_prefs(data):
     active = data.get('active', DEFAULT_PREFS['active'])
     if not isinstance(active, list) or len(set(active)) != len(active) or any(a not in STREAMS for a in active):
         raise ValueError('Active indicators must be a list of known, distinct indicators.')
+    order = data.get('order', list(STREAMS))
+    if not isinstance(order, list) or len(set(order)) != len(order) or any(o not in STREAMS for o in order):
+        raise ValueError('Order must be a list of known, distinct indicators.')
+    order = order + [s for s in STREAMS if s not in order]  # anything left out keeps its default place at the end
     stage_colors = dict(DEFAULT_STAGE_COLORS)
     given = data.get('stageColors', {})
     if not isinstance(given, dict):
@@ -87,7 +91,7 @@ def clean_prefs(data):
         if key not in STAGES or not isinstance(value, str) or not re.fullmatch(r'#[0-9a-fA-F]{6}', value):
             raise ValueError('Stage colors must be #rrggbb values for deep, rem, light and awake.')
         stage_colors[key] = value.lower()
-    return {'colors': colors, 'active': [a for a in STREAMS if a in active], 'stageColors': stage_colors}
+    return {'colors': colors, 'active': [a for a in STREAMS if a in active], 'stageColors': stage_colors, 'order': order}
 
 def load_prefs(path=None):
     path = path or PREFS_PATH

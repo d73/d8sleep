@@ -101,7 +101,7 @@ function renderLive(){
   const tag=(text,state)=>{const item=document.createElement('span'),dot=document.createElement('i'),label=document.createElement('span');item.className='status-tag';dot.className=state===true?'status-tag-dot good':state===false?'status-tag-dot bad':'status-tag-dot';dot.setAttribute('aria-hidden','true');label.textContent=text;item.append(dot,label);strip.append(item);};
   tag(yesNo(d?.online,'Online','Offline')==='—'?'Connection unknown':yesNo(d?.online,'Online','Offline'),d?.online);
   tag(yesNo(d?.hasWater,'Water','Water low / absent')==='—'?'Water unknown':yesNo(d?.hasWater,'Water','Water low / absent'),d?.hasWater);
-  const fw=document.createElement('span');fw.className='status-firmware';fw.textContent=`FW ${d?.firmwareVersion||'—'}`;strip.append(fw);
+  const fw=document.createElement('span');fw.className='status-firmware';fw.textContent=`Firmware ${d?.firmwareVersion||'—'}`;strip.append(fw);
   const card=(title)=>{const box=document.createElement('div'),label=document.createElement('span');box.className='bento-card';label.className='bento-label';label.textContent=title;box.append(label);return box;};
   const line=(box,value,cls)=>{const text=document.createElement('span');text.className=cls;text.textContent=value;box.append(text);};
   const modes=[['off','Off'],['smart:bedtime','Bedtime'],['smart:initial','Early sleep'],['smart:final','Late sleep']];
@@ -194,7 +194,7 @@ function renderSession(){
   $('summary-window').textContent=[window,Number.isFinite(inBed)?`${formatDuration(inBed)} in bed`:''].filter(Boolean).join(' · ')||'Sleep window not reported';
   renderStages(night);
   const bio=$('session-bio');bio.replaceChildren();
-  for(const [key,label,suffix] of SUMMARY_STREAMS){const cell=document.createElement('div'),name=document.createElement('span'),value=document.createElement('strong'),range=document.createElement('small'),parts=summaryParts(key,suffix,seriesStats(night,key));
+  for(const [key] of orderedStreams()){const [,label,suffix]=SUMMARY_STREAMS.find(x=>x[0]===key);const cell=document.createElement('div'),name=document.createElement('span'),value=document.createElement('strong'),range=document.createElement('small'),parts=summaryParts(key,suffix,seriesStats(night,key));
     cell.className='bio-cell';name.textContent=label;value.textContent=parts.avg;range.textContent=parts.range;cell.append(name,value,range);bio.append(cell);}
   renderSessionChart(night);
 }
@@ -204,25 +204,28 @@ const CHART_DEFAULT_COLORS={heartRate:'#e57373',hrv:'#64b5f6',tempBedC:'#ffb74d'
 const CHART_GAP_MS=30*60*1000, CHART_MATCH_MS=10*60*1000;
 function chartStep(points){if(points.length<2)return 0;const gaps=[];for(let i=1;i<points.length;i++)gaps.push(points[i].time-points[i-1].time);gaps.sort((a,b)=>a-b);return gaps[Math.floor(gaps.length/2)];}
 const STAGE_DEFAULT_COLORS={deep:'#5c6bc0',rem:'#ba68c8',light:'#4fc3f7',awake:'#ffb74d'};
-let chartPrefs={colors:{...CHART_DEFAULT_COLORS},active:['heartRate'],stageColors:{...STAGE_DEFAULT_COLORS}}, chartSession=null, chartSaveTimer=null;
+let chartPrefs={colors:{...CHART_DEFAULT_COLORS},active:['heartRate'],stageColors:{...STAGE_DEFAULT_COLORS},order:CHART_STREAMS.map(s=>s[0])}, chartSession=null, chartSaveTimer=null;
+// The user's chosen order of the five indicators; chips, the colour list, the readout and the nightly strip all follow it.
+function orderedStreams(){const rank=new Map(chartPrefs.order.map((k,i)=>[k,i]));return [...CHART_STREAMS].sort((a,b)=>(rank.has(a[0])?rank.get(a[0]):99)-(rank.has(b[0])?rank.get(b[0]):99));}
+function moveStream(key,toIndex){const rest=chartPrefs.order.filter(k=>k!==key);rest.splice(Math.max(0,Math.min(rest.length,toIndex)),0,key);chartPrefs.order=rest;}
 function isTempStream(key){return key==='tempBedC'||key==='tempRoomC';}
 function chartNumber(key,value){return isTempStream(key)&&unit==='F'?value*9/5+32:value;}
 function chartText(key,value){const n=chartNumber(key,value);if(isTempStream(key))return `${Math.round(n)}°${unit==='F'?'F':'C'}`;return key==='respiratoryRate'?n.toFixed(1):String(Math.round(n));}
 function chartPoints(session,key){const raw=session?.series?.[key]??(key==='heartRate'?session?.heart_rate_series:null);return (Array.isArray(raw)?raw:[]).filter(p=>p&&typeof p.value==='number'&&Number.isFinite(p.value)&&typeof p.timestamp==='string'&&Number.isFinite(Date.parse(p.timestamp))).map(p=>({time:Date.parse(p.timestamp),value:p.value})).sort((a,b)=>a.time-b.time);}
 function nearestIndex(list,time,get){let lo=0,hi=list.length-1;while(lo<hi){const mid=Math.floor((lo+hi)/2);if(get(list[mid])<time)lo=mid+1;else hi=mid;}return lo>0&&time-get(list[lo-1])<=get(list[lo])-time?lo-1:lo;}
-function normalizeChartPrefs(raw){const colors={...CHART_DEFAULT_COLORS};for(const [key] of CHART_STREAMS){const value=raw?.colors?.[key];if(typeof value==='string'&&/^#[0-9a-fA-F]{6}$/.test(value))colors[key]=value.toLowerCase();}const known=CHART_STREAMS.map(s=>s[0]);const active=Array.isArray(raw?.active)?known.filter(k=>raw.active.includes(k)):['heartRate'];const stageColors={...STAGE_DEFAULT_COLORS};for(const key of Object.keys(STAGE_DEFAULT_COLORS)){const value=raw?.stageColors?.[key];if(typeof value==='string'&&/^#[0-9a-fA-F]{6}$/.test(value))stageColors[key]=value.toLowerCase();}return {colors,active,stageColors};}
+function normalizeChartPrefs(raw){const colors={...CHART_DEFAULT_COLORS};for(const [key] of CHART_STREAMS){const value=raw?.colors?.[key];if(typeof value==='string'&&/^#[0-9a-fA-F]{6}$/.test(value))colors[key]=value.toLowerCase();}const known=CHART_STREAMS.map(s=>s[0]);const active=Array.isArray(raw?.active)?known.filter(k=>raw.active.includes(k)):['heartRate'];const stageColors={...STAGE_DEFAULT_COLORS};for(const key of Object.keys(STAGE_DEFAULT_COLORS)){const value=raw?.stageColors?.[key];if(typeof value==='string'&&/^#[0-9a-fA-F]{6}$/.test(value))stageColors[key]=value.toLowerCase();}const wanted=Array.isArray(raw?.order)?raw.order.filter((k,i,all)=>known.includes(k)&&all.indexOf(k)===i):[];const order=[...wanted,...known.filter(k=>!wanted.includes(k))];return {colors,active,stageColors,order};}
 function renderSessionChart(session){
   if(session!==undefined)chartSession=session;
   const container=$('heart-chart-content'),readout=$('chart-readout'),chips=$('chart-chips');container.replaceChildren();chips.replaceChildren();readout.textContent='';
   const data={};for(const [key] of CHART_STREAMS)data[key]=chartPoints(chartSession,key);
-  for(const [key,label] of CHART_STREAMS){
+  for(const [key,label] of orderedStreams()){
     const chip=document.createElement('button'),dot=document.createElement('i'),text=document.createElement('span'),on=chartPrefs.active.includes(key);
     chip.type='button';chip.className='chart-chip';chip.setAttribute('aria-pressed',String(on));dot.className='chart-chip-dot';dot.style.background=chartPrefs.colors[key];text.textContent=label;chip.append(dot,text);
     if(!data[key].length)chip.title='No samples in this session';
     chip.addEventListener('click',()=>{chartPrefs.active=on?chartPrefs.active.filter(k=>k!==key):CHART_STREAMS.map(s=>s[0]).filter(k=>k===key||chartPrefs.active.includes(k));saveChartPrefs();renderSessionChart();});
     chips.append(chip);
   }
-  const active=CHART_STREAMS.filter(s=>chartPrefs.active.includes(s[0])&&data[s[0]].length);
+  const active=orderedStreams().filter(s=>chartPrefs.active.includes(s[0])&&data[s[0]].length);
   if(!active.length){const empty=document.createElement('p');empty.className='heart-chart-empty';empty.textContent=chartPrefs.active.length?'No samples for the selected indicators in this session.':'Choose an indicator above.';container.append(empty);return;}
   const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');
   const node=(name,attrs)=>{const e=document.createElementNS(ns,name);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));return e;};
@@ -269,13 +272,34 @@ function renderSessionChart(session){
   if(last!==first){const end=document.createElement('span');end.textContent=format(last);range.append(end);}container.append(range);
   if(gaps){const note=document.createElement('p');note.className='heart-chart-note';note.textContent='Unusually long gaps in a stream are not connected.';container.append(note);}
 }
+function commitStreamOrder(){saveChartPrefs();renderChartColors();if(typeof renderSession==='function')renderSession();else renderSessionChart();}
+// Drag a row by its handle (mouse or touch) to reorder; the handle also takes the arrow keys.
+function attachRowDrag(handle,row,box,key){
+  handle.addEventListener('pointerdown',event=>{
+    if(readOnly)return;event.preventDefault();try{if(handle.setPointerCapture)handle.setPointerCapture(event.pointerId);}catch{}row.className+=' dragging';
+    const rows=()=>[...box.querySelectorAll('.chart-color-row')];
+    const move=e=>{const list=rows();let target=list.length-1;for(let i=0;i<list.length;i++){const r=list[i].getBoundingClientRect();if(e.clientY<r.top+r.height/2){target=i;break;}}
+      const current=list.indexOf(row);if(target!==current)box.insertBefore(row,target>current?list[target].nextSibling:list[target]);};
+    const end=()=>{handle.removeEventListener('pointermove',move);handle.removeEventListener('pointerup',end);handle.removeEventListener('pointercancel',end);row.className=row.className.replace(' dragging','');
+      const order=rows().map(r=>r._key);if(order.join()!==chartPrefs.order.join()){chartPrefs.order=order;commitStreamOrder();}};
+    handle.addEventListener('pointermove',move);handle.addEventListener('pointerup',end);handle.addEventListener('pointercancel',end);
+  });
+  handle.addEventListener('keydown',event=>{
+    if(readOnly||(event.key!=='ArrowUp'&&event.key!=='ArrowDown'))return;event.preventDefault();
+    moveStream(key,chartPrefs.order.indexOf(key)+(event.key==='ArrowUp'?-1:1));commitStreamOrder();
+    const again=[...box.querySelectorAll('.chart-color-row')].find(r=>r._key===key);if(again&&again._handle)again._handle.focus();
+  });
+}
 function renderChartColors(){
   const box=$('chart-colors');box.replaceChildren();
-  for(const [key,label] of CHART_STREAMS){const row=document.createElement('label'),text=document.createElement('span'),input=document.createElement('input');
-    row.className='chart-color-row';text.textContent=label;input.type='color';input.value=chartPrefs.colors[key];input.disabled=readOnly;input.setAttribute('aria-label',`${label} color`);
-    input.addEventListener('input',()=>{chartPrefs.colors[key]=input.value;saveChartPrefs();renderSessionChart();});row.append(text,input);box.append(row);}
+  for(const [key,label] of orderedStreams()){const row=document.createElement('div'),handle=document.createElement('button'),text=document.createElement('span'),input=document.createElement('input');
+    row.className='chart-color-row';row._key=key;row._handle=handle;
+    handle.type='button';handle.className='drag-handle';handle.textContent='⋮⋮';handle.disabled=readOnly;handle.title='Drag to reorder';handle.setAttribute('aria-label',`Move ${label}. Drag, or use the up and down arrow keys.`);
+    text.textContent=label;text.className='chart-color-name';input.type='color';input.value=chartPrefs.colors[key];input.disabled=readOnly;input.setAttribute('aria-label',`${label} color`);
+    input.addEventListener('input',()=>{chartPrefs.colors[key]=input.value;saveChartPrefs();renderSessionChart();});
+    attachRowDrag(handle,row,box,key);row.append(handle,text,input);box.append(row);}
   const reset=document.createElement('button');reset.type='button';reset.className='chart-colors-reset';reset.textContent='Reset defaults';reset.disabled=readOnly;
-  reset.addEventListener('click',()=>{chartPrefs.colors={...CHART_DEFAULT_COLORS};saveChartPrefs();renderChartColors();renderSessionChart();});box.append(reset);
+  reset.addEventListener('click',()=>{chartPrefs.colors={...CHART_DEFAULT_COLORS};chartPrefs.order=CHART_STREAMS.map(s=>s[0]);commitStreamOrder();});box.append(reset);
 }
 function sendChartPrefs(){clearTimeout(chartSaveTimer);chartSaveTimer=null;if(readOnly)return;fetch('/api/prefs',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(chartPrefs)}).catch(()=>{});}
 function saveChartPrefs(){clearTimeout(chartSaveTimer);chartSaveTimer=setTimeout(sendChartPrefs,300);}
