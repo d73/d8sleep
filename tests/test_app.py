@@ -119,6 +119,36 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(result['metrics']['respiratoryRate']['value'], 15.5)  # snapshot card unchanged
         self.assertEqual(result['series']['respiratoryRate'], [{'timestamp': '2026-01-02T00:00:00Z', 'value': 15.0}, {'timestamp': '2026-01-02T01:00:00Z', 'value': 16.0}])
 
+    def test_sessions_list_newest_first_with_stages_score_and_clean_fields(self):
+        original = self.client.transport
+        def interval(ts, **extra):
+            return {'ts': ts, 'timeseries': {}, **extra}
+        def transport(method, url, payload, token):
+            if url.endswith('/intervals'):
+                return {'intervals': [
+                    interval('2026-01-01T00:00:00Z', score=0),
+                    interval('2026-01-03T00:00:00Z', score=88, duration=27000, sleepStart='2026-01-03T00:30:00Z', sleepEnd='2026-01-03T07:00:00Z',
+                             id='secret', device={'id': 'secret-device'},
+                             stages=[{'stage': 'awake', 'duration': 600}, {'stage': 'deep', 'duration': 3600}, {'stage': 'bogus', 'duration': 5}, {'stage': 'rem', 'duration': -1}, {'stage': 'light', 'duration': 'x'}],
+                             stageSummary={'sleepDuration': 16200, 'totalDuration': 27000, 'deepDuration': 3600, 'unknown': 9}),
+                    interval('2026-01-02T00:00:00Z', score=70),
+                    {'ts': 'bad'},
+                ]}
+            return original(method, url, payload, token)
+        self.client.transport = transport
+        result = self.client.session_biometrics('left')
+        self.assertEqual([x['start'] for x in result['sessions']], ['2026-01-03T00:00:00Z', '2026-01-02T00:00:00Z', '2026-01-01T00:00:00Z'])
+        self.assertEqual(result['start'], '2026-01-03T00:00:00Z')  # top level mirrors the latest night
+        latest = result['sessions'][0]
+        self.assertEqual(latest['score'], 88)
+        self.assertIsNone(result['sessions'][2]['score'])  # a score of 0 means not reported
+        self.assertEqual(latest['stages'], [{'stage': 'awake', 'duration': 600}, {'stage': 'deep', 'duration': 3600}])
+        self.assertEqual(latest['stage_summary']['sleepDuration'], 16200)
+        self.assertNotIn('unknown', latest['stage_summary'])
+        self.assertEqual(latest['sleep_start'], '2026-01-03T00:30:00Z')
+        self.assertEqual(latest['duration'], 27000)
+        self.assertNotIn('id', latest); self.assertNotIn('device', latest)
+
     def test_session_biometrics_empty_response(self):
         original = self.client.transport
         self.client.transport = lambda method,url,payload,token: {'intervals': []} if url.endswith('/intervals') else original(method,url,payload,token)
@@ -188,6 +218,13 @@ class ServerTests(unittest.TestCase):
             for bad in ({'colors': {'heartRate': 'red'}}, {'colors': {'bogus': '#000000'}}, {'active': ['nope']}, {'active': ['hrv', 'hrv']}, {'colors': []}, []):
                 self.assertEqual(self.put(bad)[0], 400, bad)
             self.assertEqual(self.get_prefs()[1]['prefs'], data['prefs'])
+            status, data = self.put({'stageColors': {'deep': '#0A0B0C'}})
+            self.assertEqual(status, 200)
+            self.assertEqual(data['prefs']['stageColors']['deep'], '#0a0b0c')
+            self.assertEqual(data['prefs']['stageColors']['rem'], server.DEFAULT_STAGE_COLORS['rem'])
+            for bad in ({'stageColors': {'deep': 'blue'}}, {'stageColors': {'bogus': '#000000'}}, {'stageColors': []}):
+                self.assertEqual(self.put(bad)[0], 400, bad)
+            self.assertEqual(server.load_prefs()['stageColors']['deep'], '#0a0b0c')
 
     def test_prefs_write_needs_this_pc_origin_and_json(self):
         import tempfile, pathlib

@@ -141,13 +141,8 @@ class EightClient:
         candidates = [x for x in intervals if isinstance(x, dict) and timestamp(x.get('ts')) is not None]
         if not candidates:
             return None
-        session = max(candidates, key=lambda x: timestamp(x['ts']))
-        series = session.get('timeseries') or {}
-        if not isinstance(series, dict):
-            series = {}
-        metrics = {}
-        heart_rate_series = []
-        all_series = {}
+        candidates.sort(key=lambda x: timestamp(x['ts']), reverse=True)
+
         def clean(samples):
             if not isinstance(samples, list):
                 return []
@@ -157,30 +152,41 @@ class EightClient:
             valid.sort(key=lambda x: timestamp(x[0]))
             return valid
 
-        for key in ('heartRate', 'hrv', 'respiratoryRate', 'tempBedC', 'tempRoomC'):
-            samples = series.get(key) or []
-            if not isinstance(samples, list):
-                samples = []
-            valid = [x for x in samples if isinstance(x, (list, tuple)) and len(x) >= 2
-                     and timestamp(x[0]) is not None and isinstance(x[1], (int, float))
-                     and not isinstance(x[1], bool) and math.isfinite(x[1])]
-            if valid:
-                valid.sort(key=lambda x: timestamp(x[0]))
-                sample = valid[-1]
-                metrics[key] = {'timestamp': sample[0], 'value': sample[1]}
+        def number(value):
+            return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0 else None
+
+        def night(session):
+            series = session.get('timeseries') or {}
+            if not isinstance(series, dict):
+                series = {}
+            metrics, all_series = {}, {}
+            for key in ('heartRate', 'hrv', 'respiratoryRate', 'tempBedC', 'tempRoomC'):
+                valid = clean(series.get(key))
+                metrics[key] = {'timestamp': valid[-1][0], 'value': valid[-1][1]} if valid else None
                 all_series[key] = [{'timestamp': point[0], 'value': point[1]} for point in valid]
-                if key == 'heartRate':
-                    heart_rate_series = all_series[key]
-            else:
-                metrics[key] = None
-                all_series[key] = []
-        # respiratoryRate holds one nightly value; the hourly curve is nemeanRespiratoryRate.
-        hourly = clean(series.get('nemeanRespiratoryRate'))
-        if len(hourly) > len(all_series.get('respiratoryRate', [])):
-            all_series['respiratoryRate'] = [{'timestamp': point[0], 'value': point[1]} for point in hourly]
-        return {'start': session.get('ts'), 'presence_end': session.get('presenceEnd'),
-                'incomplete': session.get('incomplete') if isinstance(session.get('incomplete'), bool) else None,
-                'metrics': metrics, 'heart_rate_series': heart_rate_series, 'series': all_series}
+            # respiratoryRate holds one nightly value; the hourly curve is nemeanRespiratoryRate.
+            hourly = clean(series.get('nemeanRespiratoryRate'))
+            if len(hourly) > len(all_series['respiratoryRate']):
+                all_series['respiratoryRate'] = [{'timestamp': point[0], 'value': point[1]} for point in hourly]
+            stages = []
+            for item in session.get('stages') if isinstance(session.get('stages'), list) else []:
+                if isinstance(item, dict) and item.get('stage') in ('awake', 'light', 'deep', 'rem', 'out') and number(item.get('duration')) is not None:
+                    stages.append({'stage': item['stage'], 'duration': item['duration']})
+            summary_raw = session.get('stageSummary') if isinstance(session.get('stageSummary'), dict) else {}
+            summary = {key: number(summary_raw.get(key)) for key in
+                       ('totalDuration', 'sleepDuration', 'outDuration', 'awakeDuration', 'lightDuration', 'deepDuration', 'remDuration')}
+            score = number(session.get('score'))
+            return {'start': session.get('ts'), 'presence_end': session.get('presenceEnd'),
+                    'sleep_start': session.get('sleepStart') if timestamp(session.get('sleepStart')) is not None else None,
+                    'sleep_end': session.get('sleepEnd') if timestamp(session.get('sleepEnd')) is not None else None,
+                    'duration': number(session.get('duration')),
+                    'score': score if score else None,
+                    'stages': stages, 'stage_summary': summary,
+                    'incomplete': session.get('incomplete') if isinstance(session.get('incomplete'), bool) else None,
+                    'metrics': metrics, 'heart_rate_series': all_series['heartRate'], 'series': all_series}
+
+        sessions = [night(x) for x in candidates[:14]]
+        return {**sessions[0], 'sessions': sessions}
 
     def set_level(self, side, level):
         if isinstance(level, bool) or not isinstance(level, int) or not -100 <= level <= 100:
