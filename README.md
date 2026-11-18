@@ -17,6 +17,12 @@ Account credentials and tokens remain on the server and are never sent to phone 
 
 The web control and CLI use the app-style -10 to +10 scale; each step maps to 10 units on the unofficial API scale (-100 to +100). Non-integer readings are displayed without rounding away the reported value. The API reports device and target **levels**, not a verified thermometer reading. The degree estimate uses a community mapping and may not match the actual bed temperature. The app does not change alarm, base, or sleep-stage settings. Dual-side control depends on which user IDs the account can access.
 
+## Sleep session archive
+
+When the app fetches sleep sessions for a side, it saves each identifiable interval returned by Eight Sleep as a separate JSON file in `data/sessions/`, including intervals older than the 14 shown in the dashboard. Select each side in the app to fetch and archive that side. File names include the side, original start time in UTC and a unique suffix; if Eight Sleep later corrects the start time, the contents update but the original file name stays. Each file contains `side`, the original `interval` object (including fields the dashboard does not currently display), and the daily `score` when available for a displayed main session. Sessions beyond the 14 most recent are archived without a score unless one was saved previously. A repeated fetch updates the same file; a temporary score-fetch failure does not erase a previously saved score. The archive grows as the app fetches sessions; it is not a complete historical backfill beyond what the upstream intervals endpoint returns. An archive write failure is logged and does not stop live data from loading.
+
+These files contain sensitive sleep data and may include identifiers present in the upstream response. They remain on this computer, are not served as raw archive files by the app, and `data/` is ignored by Git. Protect or back up this folder as you would other health records.
+
 ## Command line
 
 From a Windows command prompt in this folder (or use the full path to `pod.bat`), for example:

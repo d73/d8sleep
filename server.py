@@ -229,7 +229,7 @@ def main():
     global client
     load_env()
     if os.getenv('EIGHT_EMAIL') and os.getenv('EIGHT_PASSWORD'):
-        client = EightClient(os.environ['EIGHT_EMAIL'], os.environ['EIGHT_PASSWORD'])
+        client = EightClient(os.environ['EIGHT_EMAIL'], os.environ['EIGHT_PASSWORD'], archive_dir=ROOT / 'data' / 'sessions')
     port = int(os.getenv('PORT', '8787'))
     print(f'd8sleep: http://localhost:{port} (also available on your home network)')
     ThreadingHTTPServer(('0.0.0.0', port), Handler).serve_forever()
