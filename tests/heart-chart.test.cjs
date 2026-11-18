@@ -16,7 +16,7 @@ function element(tag) {
 }
 
 function setup(session, { unit = 'C', readOnly = false } = {}) {
-  const ids = { 'heart-chart-content': element('div'), 'chart-readout': element('span'), 'chart-chips': element('div'), 'chart-colors': element('div') };
+  const ids = { 'heart-chart-content': element('div'), 'chart-readout': element('span'), 'chart-chips': element('div'), 'chart-colors': element('div'), 'chart-colors-btn': element('button'), 'stage-colors': element('div'), 'stage-colors-btn': element('button') };
   const fetches = [], timers = [];
   const ctx = vm.createContext({
     $: id => ids[id], unit, readOnly,
@@ -149,4 +149,32 @@ test('a long dropout in a dense stream is not connected', () => {
   const t = setup({ series: { heartRate: dense } });
   assert.equal((t.svg().children.find(n => n.tag === 'path').attrs.d.match(/M/g) || []).length, 2);
   assert.ok(t.ids['heart-chart-content'].children.some(n => /Unusually long gaps/.test(n.textContent)));
+});
+
+test('closing a colour picker saves at once, and only when one was open', () => {
+  const t = setup(null);
+  t.ids['stage-colors'].hidden = false;
+  t.ctx.saveChartPrefs();                       // a debounced save is pending
+  assert.equal(t.fetches.length, 0);
+  assert.equal(t.ctx.closeColorPopovers(), true);
+  assert.equal(t.ids['stage-colors'].hidden, true);
+  assert.equal(t.ids['stage-colors-btn'].attrs['aria-expanded'], 'false');
+  assert.equal(t.fetches.length, 1);
+  assert.equal(t.fetches[0].init.method, 'PUT');
+  assert.equal(t.ctx.closeColorPopovers(), false);  // nothing open: no extra request
+  assert.equal(t.fetches.length, 1);
+});
+
+test('opening one picker closes the other, and read-only never saves', () => {
+  const t = setup(null);
+  t.ids['chart-colors'].hidden = false;
+  t.ids['stage-colors'].hidden = true;
+  t.ctx.toggleColorPopover('stage-colors', 'stage-colors-btn', () => {});
+  assert.equal(t.ids['chart-colors'].hidden, true);
+  assert.equal(t.ids['stage-colors'].hidden, false);
+  assert.equal(t.fetches.length, 1);
+  const locked = setup(null, { readOnly: true });
+  locked.ids['chart-colors'].hidden = false;
+  assert.equal(locked.ctx.closeColorPopovers(), true);
+  assert.equal(locked.fetches.length, 0);
 });

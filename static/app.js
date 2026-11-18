@@ -277,7 +277,12 @@ function renderChartColors(){
   const reset=document.createElement('button');reset.type='button';reset.className='chart-colors-reset';reset.textContent='Reset defaults';reset.disabled=readOnly;
   reset.addEventListener('click',()=>{chartPrefs.colors={...CHART_DEFAULT_COLORS};saveChartPrefs();renderChartColors();renderSessionChart();});box.append(reset);
 }
-function saveChartPrefs(){clearTimeout(chartSaveTimer);chartSaveTimer=setTimeout(async()=>{try{await fetch('/api/prefs',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(chartPrefs)});}catch{}},300);}
+function sendChartPrefs(){clearTimeout(chartSaveTimer);chartSaveTimer=null;if(readOnly)return;fetch('/api/prefs',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(chartPrefs)}).catch(()=>{});}
+function saveChartPrefs(){clearTimeout(chartSaveTimer);chartSaveTimer=setTimeout(sendChartPrefs,300);}
+// Colour pickers: closing one (outside click, Escape, or its button) saves immediately instead of waiting out the debounce.
+const COLOR_POPOVERS=[['chart-colors','chart-colors-btn'],['stage-colors','stage-colors-btn']];
+function closeColorPopovers(){let closed=false;for(const [boxId,buttonId] of COLOR_POPOVERS){const box=$(boxId);if(box&&!box.hidden){box.hidden=true;$(buttonId).setAttribute('aria-expanded','false');closed=true;}}if(closed)sendChartPrefs();return closed;}
+function toggleColorPopover(boxId,buttonId,render){const box=$(boxId),opening=box.hidden;closeColorPopovers();if(opening){render();box.hidden=false;$(buttonId).setAttribute('aria-expanded','true');}}
 async function loadChartPrefs(){try{const data=await api('/api/prefs');chartPrefs=normalizeChartPrefs(data.prefs);}catch{}renderChartColors();renderStageColors();renderSession();}
 async function pollSession(){
   if(document.hidden||!selected||busy||dragging||sessionInFlight===selected)return;
@@ -351,7 +356,8 @@ function toggleDrawer(id){const d=$(id);for(const other of document.querySelecto
 $('tab-status').onclick=()=>toggleDrawer('drawer-status');$('tab-session').onclick=()=>toggleDrawer('drawer-session');
 for(const b of document.querySelectorAll('[data-close]'))b.onclick=()=>setDrawer(b.dataset.close,false);
 $('drawer-backdrop').onclick=()=>{for(const d of document.querySelectorAll('.drawer.open'))setDrawer(d.id,false);};
-document.addEventListener('keydown',e=>{if(e.key==='Escape')for(const d of document.querySelectorAll('.drawer.open'))setDrawer(d.id,false);});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(closeColorPopovers())return;for(const d of document.querySelectorAll('.drawer.open'))setDrawer(d.id,false);}});
 for(const d of document.querySelectorAll('.drawer'))d.setAttribute('aria-hidden','true');
-$('chart-colors-btn').onclick=()=>{const box=$('chart-colors'),open=box.hidden;if(open)renderChartColors();box.hidden=!open;$('chart-colors-btn').setAttribute('aria-expanded',String(open));};void loadChartPrefs();
-$('stage-colors-btn').onclick=()=>{const box=$('stage-colors'),open=box.hidden;if(open)renderStageColors();box.hidden=!open;$('stage-colors-btn').setAttribute('aria-expanded',String(open));};
+$('chart-colors-btn').onclick=()=>toggleColorPopover('chart-colors','chart-colors-btn',renderChartColors);
+$('stage-colors-btn').onclick=()=>toggleColorPopover('stage-colors','stage-colors-btn',renderStageColors);
+document.addEventListener('click',event=>{if(event.target.closest&&event.target.closest('#chart-colors,#stage-colors,#chart-colors-btn,#stage-colors-btn'))return;closeColorPopovers();});
