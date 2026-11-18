@@ -12,22 +12,22 @@ function element(tag) {
     addEventListener(type, fn) { this.handlers[type] = fn; },
     append(...nodes) { this.children.push(...nodes); },
     replaceChildren(...nodes) { this.children = nodes; },
-    getBoundingClientRect() { return { left: 0, width: 320 }; } };
+    focus() { this.focused = true; }, getBoundingClientRect() { return { left: 0, width: 320 }; } };
 }
 const ids = {};
 function setup(session, { unit = 'C', readOnly = false } = {}) {
   for (const id of ['session-state', 'summary-score', 'summary-asleep', 'summary-window', 'session-bio', 'session-updated', 'night-switcher', 'session-stages-content', 'stage-colors',
     'heart-chart-content', 'chart-readout', 'chart-chips', 'chart-colors']) ids[id] = element('div');
-  const fetches = [], timers = [];
+  const fetches = [], timers = [], events = {};
   const ctx = vm.createContext({
     $: id => ids[id], unit, readOnly, selected: 'left', sessionSide: 'left', sessionData: session, sessionCheckedAt: null,
-    when: v => String(v), document: { createElement: element, createElementNS: (_, tag) => element(tag), createTextNode: text => ({ tag: '#text', textContent: text, children: [] }) },
+    when: v => String(v), document: { createElement: element, createElementNS: (_, tag) => element(tag), createTextNode: text => ({ tag: '#text', textContent: text, children: [] }), addEventListener: (name, fn) => { events[name] = fn; } },
     fetch: async (url, init) => { fetches.push({ url, init }); return { ok: true }; }, api: async () => ({}),
     setTimeout: fn => { timers.push(fn); return timers.length; }, clearTimeout: () => {},
   });
   vm.runInContext(code, ctx);
   ctx.renderSession();
-  return { ctx, fetches, timers };
+  return { ctx, fetches, timers, events };
 }
 const texts = node => [node.textContent, ...node.children.flatMap(texts)].filter(Boolean);
 const night = (start, overrides = {}) => ({
@@ -75,6 +75,28 @@ test('session list shows at most ten rows and retains all nights', () => {
   const t=setup({...nights[0],sessions:nights});const [menu]=ids['night-switcher'].children;const [,choices]=menu.children;
   assert.equal(choices.size,10);assert.equal(choices.children.length,14);assert.equal(choices.children[0].value,'0');
   choices.value='13';choices.handlers.change();assert.equal(vm.runInContext('nightIndex',t.ctx),13);
+});
+
+test('duplicate dates show distinct times, and an open menu survives a refresh', () => {
+  const nights=[night('2026-11-14T20:00:00Z'),night('2026-11-14T16:00:00Z')];
+  const t=setup({...nights[0],sessions:nights});const [menu]=ids['night-switcher'].children;const [,choices]=menu.children;
+  assert.notEqual(choices.children[0].textContent,choices.children[1].textContent);menu.open=true;t.ctx.renderSession();assert.equal(ids['night-switcher'].children[0],menu);
+});
+
+test('keyboard arrows navigate without committing until Enter', () => {
+  const nights=[night('2026-11-14T20:00:00Z'),night('2026-11-13T20:00:00Z')];
+  const t=setup({...nights[0],sessions:nights});const [menu]=ids['night-switcher'].children;const [,choices]=menu.children;
+  menu.open=true;choices.selectedIndex=0;let prevented=false;choices.handlers.keydown({key:'ArrowDown',preventDefault(){prevented=true}});
+  assert.equal(prevented,true);assert.equal(choices.selectedIndex,1);assert.equal(vm.runInContext('nightIndex',t.ctx),0);
+  choices.value='1';choices.handlers.keydown({key:'Enter',preventDefault(){}});assert.equal(vm.runInContext('nightIndex',t.ctx),1);
+});
+
+test('clicking outside closes the open session list', () => {
+  const nights=[night('2026-11-14T20:00:00Z'),night('2026-11-13T20:00:00Z')];
+  const t=setup({...nights[0],sessions:nights});const box=ids['night-switcher'],[menu]=box.children;menu.open=true;
+  box.contains=target=>target==='inside';box.querySelector=()=>menu;
+  t.events.click({target:'inside'});assert.equal(menu.open,true);
+  t.events.click({target:'outside'});assert.equal(menu.open,false);
 });
 
 test('completeness badge is hidden unless the API reports a boolean', () => {
