@@ -149,6 +149,38 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(latest['duration'], 27000)
         self.assertNotIn('id', latest); self.assertNotIn('device', latest)
 
+    def test_sleep_score_comes_from_trends_by_main_session_and_failure_is_harmless(self):
+        original = self.client.transport
+        urls = []
+        def make(trends):
+            def transport(method, url, payload, token):
+                if url.endswith('/intervals'):
+                    return {'intervals': [
+                        {'id': '111', 'ts': '2026-01-02T00:00:00Z', 'score': 0, 'timezone': 'America/Los_Angeles', 'timeseries': {}},
+                        {'id': '222', 'ts': '2026-01-01T00:00:00Z', 'score': 0, 'timezone': 'America/Los_Angeles', 'timeseries': {}},
+                        {'id': '333', 'ts': '2025-12-31T00:00:00Z', 'score': 0, 'timeseries': {}}]}
+                if '/trends' in url:
+                    urls.append(url)
+                    return trends()
+                return original(method, url, payload, token)
+            return transport
+        self.client.transport = make(lambda: {'days': [
+            {'day': '2026-01-02', 'score': 90, 'mainSessionId': '111', 'sessionIds': ['111', '999']},
+            {'day': '2026-01-01', 'score': 0, 'mainSessionId': '222'},
+            {'day': '2025-12-31', 'score': True, 'mainSessionId': '333'}, {'bad': 1}]})
+        result = self.client.session_biometrics('left')
+        self.assertEqual([x['score'] for x in result['sessions']], [90, None, None])  # 0 and non-numeric scores are not reported
+        self.assertEqual(result['score'], 90)
+        self.assertIn('tz=America/Los_Angeles', urls[0])
+        self.assertIn('from=2025-12-30', urls[0]); self.assertIn('to=2026-01-03', urls[0])
+        def broken():
+            raise ApiError('trends down')
+        self.client.transport = make(broken)
+        result = self.client.session_biometrics('left')  # scores unavailable, sessions still load
+        self.assertEqual([x['score'] for x in result['sessions']], [None, None, None])
+        self.client.transport = make(lambda: {'days': 'not a list'})
+        self.assertEqual(self.client.session_biometrics('left')['score'], None)
+
     def test_session_biometrics_empty_response(self):
         original = self.client.transport
         self.client.transport = lambda method,url,payload,token: {'intervals': []} if url.endswith('/intervals') else original(method,url,payload,token)

@@ -1,6 +1,7 @@
 import json
 import math
-from datetime import datetime, timezone
+import re
+from datetime import datetime, timedelta, timezone
 import os
 import time
 from urllib import request, error, parse
@@ -185,8 +186,32 @@ class EightClient:
                     'incomplete': session.get('incomplete') if isinstance(session.get('incomplete'), bool) else None,
                     'metrics': metrics, 'heart_rate_series': all_series['heartRate'], 'series': all_series}
 
-        sessions = [night(x) for x in candidates[:14]]
+        chosen = candidates[:14]
+        sessions = [night(x) for x in chosen]
+        scores = self._daily_scores(uid, chosen, timestamp)
+        for item, raw in zip(sessions, chosen):
+            if item['score'] is None:
+                item['score'] = scores.get(str(raw.get('id')))
         return {**sessions[0], 'sessions': sessions}
+
+    def _daily_scores(self, uid, intervals, timestamp):
+        """Sleep scores come from /trends (per day, keyed by the day's main session); /intervals reports 0."""
+        try:
+            stamps = [timestamp(x['ts']) for x in intervals]
+            zone = next((x.get('timezone') for x in intervals if isinstance(x.get('timezone'), str)
+                         and re.fullmatch(r'[A-Za-z_]+(/[A-Za-z_+-]+)+', x['timezone'])), 'UTC')
+            first = datetime.fromtimestamp(min(stamps), timezone.utc).date() - timedelta(days=1)
+            last = datetime.fromtimestamp(max(stamps), timezone.utc).date() + timedelta(days=1)
+            url = (CLIENT + '/users/' + uid + '/trends?tz=' + parse.quote(zone, safe='/') + '&from=' + first.isoformat() + '&to=' + last.isoformat()
+                   + '&include-main=false&include-all-sessions=true&model-version=v2')
+            days = self.call('GET', url).get('days') or []
+        except (ApiError, AttributeError, KeyError, TypeError, ValueError):
+            return {}
+        scores = {}
+        for day in days:
+            if isinstance(day, dict) and isinstance(day.get('score'), (int, float)) and not isinstance(day.get('score'), bool) and math.isfinite(day['score']) and day['score'] > 0:
+                scores[str(day.get('mainSessionId'))] = day['score']
+        return scores
 
     def set_level(self, side, level):
         if isinstance(level, bool) or not isinstance(level, int) or not -100 <= level <= 100:
