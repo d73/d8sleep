@@ -1,6 +1,8 @@
 import json
+import tempfile
 import threading
 import unittest
+from pathlib import Path
 from http.client import HTTPConnection
 from unittest.mock import patch
 from http.server import ThreadingHTTPServer
@@ -185,6 +187,53 @@ class ClientTests(unittest.TestCase):
         original = self.client.transport
         self.client.transport = lambda method,url,payload,token: {'intervals': []} if url.endswith('/intervals') else original(method,url,payload,token)
         self.assertIsNone(self.client.session_biometrics('left'))
+
+    def test_session_archive_keeps_raw_data_separate_and_updates_without_duplicates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.client.archive_dir = Path(tmp)
+            original = self.client.transport
+            intervals = [{'id': f'session-{i}', 'ts': f'2026-01-{i + 1:02}T00:00:00Z',
+                          'timeseries': {'unrecognizedFutureMetric': [[1, 2]]}, 'extra': {'value': i}}
+                         for i in range(16)]
+            def transport(method, url, payload, token):
+                if url.endswith('/intervals'):
+                    return {'intervals': intervals}
+                if '/trends?' in url:
+                    return {'days': [{'mainSessionId': 'session-15', 'score': 90}]}
+                return original(method, url, payload, token)
+            self.client.transport = transport
+            response = self.client.session_biometrics('left')
+            files = list(Path(tmp).glob('*.json'))
+            self.assertEqual(len(files), 16)  # even sessions beyond the 14 shown by the UI
+            self.assertEqual(len(response['sessions']), 14)
+            saved = [json.loads(p.read_text(encoding='utf-8')) for p in files]
+            newest = next(x for x in saved if x['interval']['id'] == 'session-15')
+            self.assertEqual(newest['score'], 90)
+            self.assertEqual(newest['interval']['timeseries']['unrecognizedFutureMetric'], [[1, 2]])
+            self.assertNotIn('id', response['sessions'][0])
+            intervals[-1]['extra']['value'] = 999
+            self.client.transport = lambda method, url, payload, token: ({'days': []} if '/trends?' in url else transport(method, url, payload, token))
+            self.client.session_biometrics('left')
+            self.assertEqual(len(list(Path(tmp).glob('*.json'))), 16)
+            updated = next(json.loads(p.read_text(encoding='utf-8')) for p in files if json.loads(p.read_text(encoding='utf-8'))['interval']['id'] == 'session-15')
+            self.assertEqual(updated['interval']['extra']['value'], 999)
+            self.assertEqual(updated['score'], 90)  # a temporary trends failure does not erase it
+            self.client.session_biometrics('right')
+            self.assertEqual(len(list(Path(tmp).glob('*.json'))), 32)
+
+    def test_archive_failure_does_not_break_live_session(self):
+        original = self.client.transport
+        def transport(method, url, payload, token):
+            if url.endswith('/intervals'):
+                return {'intervals': [{'id': 'one', 'ts': '2026-01-01T00:00:00Z'}]}
+            return original(method, url, payload, token)
+        self.client.transport = transport
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'not-a-folder'
+            path.write_text('x', encoding='utf-8')
+            self.client.archive_dir = path
+            with self.assertLogs(level='WARNING'):
+                self.assertEqual(self.client.session_biometrics('left')['start'], '2026-01-01T00:00:00Z')
 
     def test_refreshes_expired_token(self):
         self.client.discover()

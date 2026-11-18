@@ -1,8 +1,12 @@
 import json
+import hashlib
+import logging
 import math
 import re
 from datetime import datetime, timedelta, timezone
 import os
+from pathlib import Path
+import tempfile
 import time
 from urllib import request, error, parse
 
@@ -17,12 +21,13 @@ class ApiError(Exception):
     pass
 
 class EightClient:
-    def __init__(self, email, password, transport=None):
+    def __init__(self, email, password, transport=None, archive_dir=None):
         self.email, self.password = email, password
         self.transport = transport or self._http
         self.token, self.expires, self.sides = None, 0, {}
         self.pod_name = 'Pod'
         self.device_id = None
+        self.archive_dir = Path(archive_dir) if archive_dir is not None else None
 
     @staticmethod
     def _http(method, url, payload=None, token=None):
@@ -192,7 +197,47 @@ class EightClient:
         for item, raw in zip(sessions, chosen):
             if item['score'] is None:
                 item['score'] = scores.get(str(raw.get('id')))
+        if self.archive_dir is not None:
+            self._archive_sessions(side, self.sides[side], candidates, scores)
         return {**sessions[0], 'sessions': sessions}
+
+    def _archive_sessions(self, side, user_id, intervals, scores):
+        """Save each returned raw interval locally, without exposing it through the web API."""
+        try:
+            self.archive_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            logging.warning('Could not create the sleep session archive; live data is still available.')
+            return
+        for interval in intervals:
+            session_id = interval.get('id')
+            # A timestamp is the fallback when the upstream response has no session ID.
+            identity = str(session_id) if session_id is not None else 'start:' + interval['ts']
+            digest = hashlib.sha256(json.dumps([str(user_id), identity], ensure_ascii=True).encode()).hexdigest()
+            path = self.archive_dir / f'{side}-{digest}.json'
+            record = {'side': side, 'interval': interval, 'score': scores.get(str(session_id))}
+            # A temporary /trends failure must not erase an already captured score.
+            try:
+                old = json.loads(path.read_text(encoding='utf-8'))
+                if record['score'] is None:
+                    record['score'] = old.get('score') if isinstance(old, dict) else None
+                if old == record:
+                    continue
+            except (OSError, ValueError):
+                pass
+            temp = None
+            try:
+                handle, temp = tempfile.mkstemp(dir=self.archive_dir, suffix='.tmp')
+                with os.fdopen(handle, 'w', encoding='utf-8') as out:
+                    json.dump(record, out, ensure_ascii=False, indent=2, allow_nan=False)
+                    out.write('\n')
+                os.replace(temp, path)
+            except (OSError, ValueError, TypeError):
+                logging.warning('Could not save a sleep session; live data is still available.')
+                if temp is not None:
+                    try:
+                        os.unlink(temp)
+                    except OSError:
+                        pass
 
     def _daily_scores(self, uid, intervals, timestamp):
         """Sleep scores come from /trends (per day, keyed by the day's main session); /intervals reports 0."""
