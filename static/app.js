@@ -77,14 +77,15 @@ function colorSlider(n){ const t=(Math.max(-10,Math.min(10,n))+10)/20; const rgb
 
 function showCurrent(raw){const marker=$('current-marker');marker.hidden=!Number.isFinite(raw);if(!marker.hidden){const fraction=(Math.max(-100,Math.min(100,raw))+100)/200;marker.style.left=`calc(${fraction*100}% + ${16-32*fraction}px)`;}}
 function displayLevel(raw){const n=raw/10;return (n>0?'+':'')+n.toFixed(1).replace(/\.0$/,'');}
+let readOnly = false;
 function syncSliderAvailability(item, level){
   const slider=$('slider'), off=item.power===false;
-  slider.disabled=off || (busy && !levelRunning) || level===null;
+  slider.disabled=readOnly || off || (busy && !levelRunning) || level===null;
   slider.dataset.off=String(off);
   slider.setAttribute('aria-describedby',off?'current-level-help slider-off-help':'current-level-help');
-  slider.title=off?'Turn on to adjust the heating level':'';
+  slider.title=readOnly?'Read-only on this device':off?'Turn on to adjust the heating level':'';
 }
-function render(){ renderLive(); renderSession(); const item=sides.find(x=>x.side===selected); if(!item)return; rememberSideLabels(); $('sides').hidden=sides.length<2; $('sides').replaceChildren(); if(sides.length>1) for(const s of sides){const b=document.createElement('button');b.textContent=s.side[0].toUpperCase()+s.side.slice(1);b.className=s.side===selected?'active':'';b.disabled=busy;b.onclick=()=>{selected=s.side;sessionRequest++;sessionInFlight=null;sessionData=null;sessionSide=null;render();void pollSession();};$('sides').append(b);} const level=Number.isInteger(item.target)?item.target:null; if(!dragging){$('value').textContent=level===null?'—':displayLevel(level); $('slider').value=level===null?0:Math.round(level/10);colorSlider(Number($('slider').value));} $('current').textContent=Number.isInteger(item.current)?displayLevel(item.current):''; showCurrent(item.power===false?null:item.current); syncCurrentDetail(); const estimated=degrees(dragging ? Number($('slider').value)*10 : level); $('estimate').textContent=estimated==='—'?'—':`~${estimated}`; $('power').textContent=item.power===null?'Power unavailable':item.power?'On':'Off'; rememberPowerLabel(item.power); $('power').setAttribute('aria-pressed',String(item.power===true)); $('power').disabled=busy || item.power===null; syncSliderAvailability(item,level); }
+function render(){ renderLive(); renderSession(); const item=sides.find(x=>x.side===selected); if(!item)return; rememberSideLabels(); $('sides').hidden=sides.length<2; $('sides').replaceChildren(); if(sides.length>1) for(const s of sides){const b=document.createElement('button');b.textContent=s.side[0].toUpperCase()+s.side.slice(1);b.className=s.side===selected?'active':'';b.disabled=busy;b.onclick=()=>{selected=s.side;sessionRequest++;sessionInFlight=null;sessionData=null;sessionSide=null;render();void pollSession();};$('sides').append(b);} const level=Number.isInteger(item.target)?item.target:null; if(!dragging){$('value').textContent=level===null?'—':displayLevel(level); $('slider').value=level===null?0:Math.round(level/10);colorSlider(Number($('slider').value));} $('current').textContent=Number.isInteger(item.current)?displayLevel(item.current):''; showCurrent(item.power===false?null:item.current); syncCurrentDetail(); const estimated=degrees(dragging ? Number($('slider').value)*10 : level); $('estimate').textContent=estimated==='—'?'—':`~${estimated}`; $('power').textContent=item.power===null?'Power unavailable':item.power?'On':'Off'; rememberPowerLabel(item.power); $('power').setAttribute('aria-pressed',String(item.power===true)); $('power').disabled=readOnly || busy || item.power===null; $('power').title=readOnly?'Read-only on this device':''; syncSliderAvailability(item,level); }
 function choiceList(options,current){
   const chips=document.createElement('div');chips.className='choices';
   const list=options.slice();if(current!==null&&current!==undefined&&!list.some(o=>o[0]===current))list.push([current,String(current)]);
@@ -215,7 +216,7 @@ async function pollDevice(){
 void pollDevice();
 function syncCurrentDetail(){const item=sides.find(s=>s.side===selected);$('current-detail').hidden=!statusAvailable || !item || item.power===false || !Number.isInteger(item.current);}
 async function readStatus(){try{return await api('/api/status');}catch(e){statusAvailable=false;syncCurrentDetail();throw e;}}
-function update(data){statusAvailable=true;if(data.pod_name)$('pod-name').textContent=data.pod_name;const previous=selected;sides=data.sides;if(!sides.some(s=>s.side===selected))selected=sides[0]?.side;if(selected!==previous){sessionRequest++;sessionInFlight=null;sessionData=null;sessionSide=null;void pollSession();}syncCurrentDetail();render();say('',true);}
+function update(data){statusAvailable=true;readOnly=data.readonly===true;if(data.pod_name)$('pod-name').textContent=data.pod_name;const previous=selected;sides=data.sides;if(!sides.some(s=>s.side===selected))selected=sides[0]?.side;if(selected!==previous){sessionRequest++;sessionInFlight=null;sessionData=null;sessionSide=null;void pollSession();}syncCurrentDetail();render();say('',true);}
 async function refresh(){try{update(await readStatus());}catch(e){say(e.message);}}
 let polling=false, revision=0;
 async function pollStatus(){if(document.hidden||busy||dragging||polling)return;polling=true;const atStart=revision;try{const data=await readStatus();if(!busy&&!dragging&&revision===atStart)update(data);}catch(e){if(!busy&&!dragging)say(e.message);}finally{polling=false;}}

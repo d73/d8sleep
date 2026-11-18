@@ -10,7 +10,7 @@ const levelCode = source.slice(source.indexOf('function level(n)'), source.index
 
 test('off disables the slider and gives an accessible explanation', () => {
   const slider = { dataset: {}, setAttribute(k, v) { this[k] = v; } };
-  const ctx = vm.createContext({ $: () => slider, busy: false, levelRunning: false });
+  const ctx = vm.createContext({ $: () => slider, busy: false, levelRunning: false, readOnly: false });
   vm.runInContext(sliderCode, ctx);
   ctx.syncSliderAvailability({ power: false }, 0);
   assert.equal(slider.disabled, true);

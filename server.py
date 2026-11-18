@@ -1,6 +1,8 @@
 import ipaddress
 import json
 import os
+import socket
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import RLock
@@ -25,6 +27,34 @@ def loopback(address):
         return ipaddress.ip_address(address).is_loopback
     except ValueError:
         return False
+
+_own_ips = (0.0, frozenset())
+
+def own_ips():
+    global _own_ips
+    if time.time() - _own_ips[0] < 30 and _own_ips[1]:
+        return _own_ips[1]
+    ips = {'127.0.0.1', '::1'}
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None):
+            ips.add(info[4][0].split('%')[0])
+    except OSError:
+        pass
+    try:  # primary outbound interface; a UDP connect sends no packets
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(('192.0.2.1', 9))
+            ips.add(probe.getsockname()[0])
+    except OSError:
+        pass
+    _own_ips = (time.time(), frozenset(ips))
+    return _own_ips[1]
+
+def local_client(address):
+    """True for this PC: loopback or one of its own interface addresses (e.g. its LAN IP)."""
+    address = (address or '').split('%')[0]
+    if address.startswith('::ffff:'):
+        address = address[7:]
+    return loopback(address) or address in own_ips()
 
 def valid_host(host):
     try:
@@ -76,7 +106,7 @@ class Handler(BaseHTTPRequestHandler):
                             return self.send(400, {'error': str(exc)})
                     if parsed.path == '/api/device':
                         return self.send(200, {'device': client.device_status()})
-                    return self.send(200, {'sides': client.status(), 'pod_name': client.pod_name})
+                    return self.send(200, {'sides': client.status(), 'pod_name': client.pod_name, 'readonly': not local_client(self.client_address[0])})
                 except ApiError as exc:
                     return self.send(502, {'error': str(exc)})
         self.send(404, {'error': 'Not found.'})
@@ -87,6 +117,8 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlsplit(origin)
         if not valid_host(self.headers.get('Host', '')) or parsed.scheme != 'http' or parsed.netloc != self.headers.get('Host') or self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
             return self.send(403, {'error': 'Request origin is not allowed.'})
+        if not local_client(self.client_address[0]):
+            return self.send(403, {'error': 'Read-only from other devices. Use d8sleep on the PC it runs on.'})
         try:
             length = int(self.headers.get('Content-Length', '0'))
             if not 0 < length <= 4096:
@@ -103,7 +135,7 @@ class Handler(BaseHTTPRequestHandler):
                     client.set_power(data.get('side'), data.get('on'))
                 else:
                     return self.send(404, {'error': 'Not found.'})
-                return self.send(200, {'sides': client.status(), 'pod_name': client.pod_name})
+                return self.send(200, {'sides': client.status(), 'pod_name': client.pod_name, 'readonly': False})
         except (ValueError, json.JSONDecodeError) as exc:
             return self.send(400, {'error': str(exc)})
         except ApiError as exc:

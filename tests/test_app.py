@@ -132,6 +132,16 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(server.valid_host('192.168.1.2:8787'))
         self.assertTrue(server.valid_host('localhost:8787'))
 
+    def test_post_requires_this_pc(self):
+        self.assertTrue(server.local_client('127.0.0.1'))
+        self.assertTrue(server.local_client('::ffff:127.0.0.1'))
+        self.assertFalse(server.local_client('192.168.1.250'))
+        self.assertFalse(server.local_client('8.8.8.8'))
+        with patch.object(server, 'local_client', return_value=False):
+            status, data = self.request('/api/power', {'side': 'left', 'on': True})
+        self.assertEqual(status, 403)
+        self.assertIn('Read-only', data['error'])
+
     def test_rejects_cross_origin(self):
         status,_ = self.request('/api/login', {'email':'a','password':'b'}, 'http://evil.test')
         self.assertEqual(status, 403)
