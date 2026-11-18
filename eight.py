@@ -147,6 +147,7 @@ class EightClient:
             series = {}
         metrics = {}
         heart_rate_series = []
+        all_series = {}
         for key in ('heartRate', 'hrv', 'respiratoryRate', 'tempBedC', 'tempRoomC'):
             samples = series.get(key) or []
             if not isinstance(samples, list):
@@ -158,13 +159,15 @@ class EightClient:
                 valid.sort(key=lambda x: timestamp(x[0]))
                 sample = valid[-1]
                 metrics[key] = {'timestamp': sample[0], 'value': sample[1]}
+                all_series[key] = [{'timestamp': point[0], 'value': point[1]} for point in valid]
                 if key == 'heartRate':
-                    heart_rate_series = [{'timestamp': point[0], 'value': point[1]} for point in valid]
+                    heart_rate_series = all_series[key]
             else:
                 metrics[key] = None
+                all_series[key] = []
         return {'start': session.get('ts'), 'presence_end': session.get('presenceEnd'),
                 'incomplete': session.get('incomplete') if isinstance(session.get('incomplete'), bool) else None,
-                'metrics': metrics, 'heart_rate_series': heart_rate_series}
+                'metrics': metrics, 'heart_rate_series': heart_rate_series, 'series': all_series}
 
     def set_level(self, side, level):
         if isinstance(level, bool) or not isinstance(level, int) or not -100 <= level <= 100:

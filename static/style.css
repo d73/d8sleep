@@ -201,3 +201,18 @@ main{padding-top:16px}.card-identity{display:flex;align-items:center;gap:10px;mi
 :root[data-theme] .settings-toggle,:root[data-theme] .power[aria-pressed=false]{border-color:var(--app-accent)}
 :root[data-theme] .chart-line{stroke:var(--app-accent)}
 :root[data-theme] .chart-point{fill:var(--app-accent)}
+.heart-chart-heading{align-items:center}.chart-readout{flex:1 1 140px;min-width:0;font-size:11px;color:#a9b3c1;text-align:right;overflow-wrap:anywhere}
+.chart-colors-btn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;border-radius:9px;border:1px solid #3a4554;background:transparent;color:inherit;cursor:pointer}
+.chart-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chart-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;border:1px solid #3a4554;background:transparent;color:inherit;font-size:12px;cursor:pointer;opacity:.55}
+.chart-chip[aria-pressed=true]{opacity:1;border-color:#6b7788;background:#2a3342}
+.chart-chip-dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+.chart-colors{margin-top:10px;padding:10px 12px;border:1px solid #3a4554;border-radius:12px;background:#1a202b;display:grid;gap:8px}
+.chart-colors[hidden]{display:none}
+.chart-color-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px}
+.chart-color-row input[type=color]{width:44px;height:28px;padding:0;border:1px solid #3a4554;border-radius:8px;background:transparent;cursor:pointer}
+.chart-color-row input[type=color]:disabled,.chart-colors-reset:disabled{opacity:.45;cursor:not-allowed}
+.chart-colors-reset{justify-self:start;padding:6px 10px;border-radius:9px;border:1px solid #3a4554;background:transparent;color:inherit;font-size:12px;cursor:pointer}
+.chart-crosshair{stroke:#8793a3;stroke-width:1;stroke-dasharray:3 3;pointer-events:none}.chart-series{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.chart-chip:focus-visible,.chart-colors-btn:focus-visible,.chart-colors-reset:focus-visible,.chart-color-row input:focus-visible{outline:2px solid var(--app-accent,#b9a7ef);outline-offset:2px}
+:root[data-theme=day] .chart-readout{color:#536174}:root[data-theme=day] .chart-colors{background:#eef2f8;border-color:#c5cfdd}:root[data-theme=day] .chart-chip[aria-pressed=true]{background:#e4eaf3;border-color:#8b97aa}:root[data-theme=day] .chart-chip,:root[data-theme=day] .chart-colors-btn,:root[data-theme=day] .chart-colors-reset{border-color:#c5cfdd}:root[data-theme=day] .chart-crosshair{stroke:#6b7788}

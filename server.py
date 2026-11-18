@@ -1,7 +1,9 @@
 import ipaddress
 import json
 import os
+import re
 import socket
+import tempfile
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -11,6 +13,10 @@ from eight import EightClient, ApiError
 
 ROOT = Path(__file__).resolve().parent
 lock = RLock()
+PREFS_PATH = ROOT / 'data' / 'prefs.json'
+STREAMS = ('heartRate', 'hrv', 'tempBedC', 'respiratoryRate', 'tempRoomC')
+DEFAULT_COLORS = {'heartRate': '#e57373', 'hrv': '#64b5f6', 'tempBedC': '#ffb74d', 'respiratoryRate': '#4db6ac', 'tempRoomC': '#9575cd'}
+DEFAULT_PREFS = {'colors': dict(DEFAULT_COLORS), 'active': ['heartRate']}
 client = None
 
 def load_env():
@@ -55,6 +61,45 @@ def local_client(address):
     if address.startswith('::ffff:'):
         address = address[7:]
     return loopback(address) or address in own_ips()
+
+def clean_prefs(data):
+    """Validate chart preferences; unknown keys and bad values are rejected, missing ones default."""
+    if not isinstance(data, dict):
+        raise ValueError('Invalid preferences.')
+    colors = dict(DEFAULT_COLORS)
+    given = data.get('colors', {})
+    if not isinstance(given, dict):
+        raise ValueError('Colors must be an object.')
+    for key, value in given.items():
+        if key not in STREAMS or not isinstance(value, str) or not re.fullmatch(r'#[0-9a-fA-F]{6}', value):
+            raise ValueError('Colors must be #rrggbb values for the known indicators.')
+        colors[key] = value.lower()
+    active = data.get('active', DEFAULT_PREFS['active'])
+    if not isinstance(active, list) or len(set(active)) != len(active) or any(a not in STREAMS for a in active):
+        raise ValueError('Active indicators must be a list of known, distinct indicators.')
+    return {'colors': colors, 'active': [a for a in STREAMS if a in active]}
+
+def load_prefs(path=None):
+    path = path or PREFS_PATH
+    try:
+        return clean_prefs(json.loads(Path(path).read_text(encoding='utf-8')))
+    except (OSError, ValueError):
+        return clean_prefs({})
+
+def save_prefs(prefs, path=None):
+    path = Path(path or PREFS_PATH)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle, temp = tempfile.mkstemp(dir=path.parent, suffix='.tmp')
+    try:
+        with os.fdopen(handle, 'w', encoding='utf-8') as out:
+            json.dump(prefs, out)
+        os.replace(temp, path)
+    except BaseException:
+        try:
+            os.unlink(temp)
+        except OSError:
+            pass
+        raise
 
 def valid_host(host):
     try:
@@ -109,7 +154,30 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(200, {'sides': client.status(), 'pod_name': client.pod_name, 'readonly': not local_client(self.client_address[0])})
                 except ApiError as exc:
                     return self.send(502, {'error': str(exc)})
+        if parsed.path == '/api/prefs':
+            return self.send(200, {'prefs': load_prefs()})
         self.send(404, {'error': 'Not found.'})
+
+    def do_PUT(self):
+        origin = urlsplit(self.headers.get('Origin', ''))
+        if not valid_host(self.headers.get('Host', '')) or origin.scheme != 'http' or origin.netloc != self.headers.get('Host') or self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
+            return self.send(403, {'error': 'Request origin is not allowed.'})
+        if not local_client(self.client_address[0]):
+            return self.send(403, {'error': 'Read-only from other devices. Use d8sleep on the PC it runs on.'})
+        if urlsplit(self.path).path != '/api/prefs':
+            return self.send(404, {'error': 'Not found.'})
+        try:
+            length = int(self.headers.get('Content-Length', '0'))
+            if not 0 < length <= 4096:
+                raise ValueError('Invalid request size.')
+            prefs = clean_prefs(json.loads(self.rfile.read(length)))
+            with lock:
+                save_prefs(prefs)
+            return self.send(200, {'prefs': prefs})
+        except (ValueError, json.JSONDecodeError) as exc:
+            return self.send(400, {'error': str(exc)})
+        except OSError:
+            return self.send(500, {'error': 'Could not save preferences.'})
 
     def do_POST(self):
         global client
