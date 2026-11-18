@@ -129,3 +129,24 @@ test('stored preferences are validated', () => {
   assert.deepEqual([...prefs.active], ['heartRate', 'hrv']);
   assert.deepEqual([...t.ctx.normalizeChartPrefs(null).active], ['heartRate']);
 });
+
+test('hourly streams stay connected, show markers, and keep a readout across the hour', () => {
+  const session = { series: { ...series('heartRate', 40, 60, 5), ...series('tempBedC', 4, 20, 60), ...series('respiratoryRate', 4, 16, 60) } };
+  const t = setup(session);
+  t.prefs().active.push('tempBedC', 'respiratoryRate');
+  t.ctx.renderSessionChart();
+  const paths = t.svg().children.filter(n => n.tag === 'path');
+  assert.equal(paths.length, 3);
+  for (const p of paths) assert.match(p.attrs.d, /L/, 'every stream draws a connected line');
+  assert.equal(t.ids['heart-chart-content'].children.some(n => /Unusually long gaps/.test(n.textContent)), false);
+  assert.ok(t.svg().children.filter(n => n.tag === 'circle' && n.attrs.class === 'chart-point').length >= 8, 'sparse streams show sample dots');
+  t.svg().handlers.click({ clientX: 100 + 36 + 0.4 * 274 });
+  assert.match(t.ids['chart-readout'].textContent, /Bed \d+°C · Resp \d+\.\d$/);
+});
+
+test('a long dropout in a dense stream is not connected', () => {
+  const dense = [...Array.from({ length: 10 }, (_, i) => ({ timestamp: minute(i * 5), value: 60 + i })), ...Array.from({ length: 10 }, (_, i) => ({ timestamp: minute(300 + i * 5), value: 70 + i }))];
+  const t = setup({ series: { heartRate: dense } });
+  assert.equal((t.svg().children.find(n => n.tag === 'path').attrs.d.match(/M/g) || []).length, 2);
+  assert.ok(t.ids['heart-chart-content'].children.some(n => /Unusually long gaps/.test(n.textContent)));
+});

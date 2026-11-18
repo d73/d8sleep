@@ -144,6 +144,7 @@ function renderSession(){
 const CHART_STREAMS=[['heartRate','Heart Rate','HR'],['hrv','HRV','HRV'],['tempBedC','Bed Temp','Bed'],['respiratoryRate','Resp Rate','Resp'],['tempRoomC','Room Temp','Room']];
 const CHART_DEFAULT_COLORS={heartRate:'#e57373',hrv:'#64b5f6',tempBedC:'#ffb74d',respiratoryRate:'#4db6ac',tempRoomC:'#9575cd'};
 const CHART_GAP_MS=30*60*1000, CHART_MATCH_MS=10*60*1000;
+function chartStep(points){if(points.length<2)return 0;const gaps=[];for(let i=1;i<points.length;i++)gaps.push(points[i].time-points[i-1].time);gaps.sort((a,b)=>a-b);return gaps[Math.floor(gaps.length/2)];}
 let chartPrefs={colors:{...CHART_DEFAULT_COLORS},active:['heartRate']}, chartSession=null, chartSaveTimer=null;
 function isTempStream(key){return key==='tempBedC'||key==='tempRoomC';}
 function chartNumber(key,value){return isTempStream(key)&&unit==='F'?value*9/5+32:value;}
@@ -179,8 +180,9 @@ function renderSessionChart(session){
   for(const fraction of [0,0.5,1]){const yy=140-fraction*128;svg.append(node('line',{x1:36,x2:310,y1:yy,y2:yy,class:'chart-grid-line'}));
     if(single){const s=scale[active[0][0]],value=s.min+(s.max-s.min)*fraction,label=node('text',{x:30,y:yy+3,'text-anchor':'end',class:'chart-axis-label'});label.textContent=(s.max-s.min)<10?value.toFixed(1):String(Math.round(value));svg.append(label);}}
   let gaps=false;
-  for(const [key] of active){let path='';const pts=data[key];for(let i=0;i<pts.length;i++){const split=i===0||pts[i].time-pts[i-1].time>CHART_GAP_MS;if(i>0&&split)gaps=true;path+=`${split?'M':'L'}${x(pts[i].time).toFixed(2)} ${scale[key].y(pts[i].value).toFixed(2)} `;}
-    const line=node('path',{d:path,class:'chart-line chart-series'});line.style.stroke=chartPrefs.colors[key];svg.append(line);}
+  for(const [key] of active){let path='';const pts=data[key],gapLimit=Math.max(CHART_GAP_MS,3*chartStep(pts));for(let i=0;i<pts.length;i++){const split=i===0||pts[i].time-pts[i-1].time>gapLimit;if(i>0&&split)gaps=true;path+=`${split?'M':'L'}${x(pts[i].time).toFixed(2)} ${scale[key].y(pts[i].value).toFixed(2)} `;}
+    const line=node('path',{d:path,class:'chart-line chart-series'});line.style.stroke=chartPrefs.colors[key];svg.append(line);
+    pts.forEach((p,i)=>{const alone=(i===0||p.time-pts[i-1].time>gapLimit)&&(i===pts.length-1||pts[i+1].time-p.time>gapLimit);if(alone||pts.length<=40){const dot=node('circle',{cx:x(p.time),cy:scale[key].y(p.value),r:2.2,class:'chart-point'});dot.style.fill=chartPrefs.colors[key];svg.append(dot);}});}
   const cross=node('line',{y1:12,y2:140,class:'chart-crosshair',visibility:'hidden'});svg.append(cross);
   const markers=active.map(([key])=>{const m=node('circle',{r:4,class:'chart-selected-point',visibility:'hidden'});m.style.fill=chartPrefs.colors[key];svg.append(m);return m;});
   svg.append(node('rect',{x:0,y:0,width:320,height:160,fill:'transparent'}));
@@ -191,7 +193,7 @@ function renderSessionChart(session){
     cross.setAttribute('x1',String(x(time)));cross.setAttribute('x2',String(x(time)));cross.setAttribute('visibility','visible');
     const parts=[];
     active.forEach(([key,,short],i)=>{const pts=data[key],j=nearestIndex(pts,time,p=>p.time),p=pts[j];
-      if(p&&Math.abs(p.time-time)<=CHART_MATCH_MS){parts.push(`${short} ${chartText(key,p.value)}`);markers[i].setAttribute('cx',String(x(p.time)));markers[i].setAttribute('cy',String(scale[key].y(p.value)));markers[i].setAttribute('visibility','visible');}
+      if(p&&Math.abs(p.time-time)<=Math.max(CHART_MATCH_MS,0.6*chartStep(pts))){parts.push(`${short} ${chartText(key,p.value)}`);markers[i].setAttribute('cx',String(x(p.time)));markers[i].setAttribute('cy',String(scale[key].y(p.value)));markers[i].setAttribute('visibility','visible');}
       else{parts.push(`${short} —`);markers[i].setAttribute('visibility','hidden');}});
     readout.textContent=`${new Date(time).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} · ${parts.join(' · ')}`;
   }
@@ -206,7 +208,7 @@ function renderSessionChart(session){
   const format=time=>new Date(time).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
   const start=document.createElement('span');start.textContent=format(first);range.append(start);
   if(last!==first){const end=document.createElement('span');end.textContent=format(last);range.append(end);}container.append(range);
-  if(gaps){const note=document.createElement('p');note.className='heart-chart-note';note.textContent='Gaps over 30 minutes are not connected.';container.append(note);}
+  if(gaps){const note=document.createElement('p');note.className='heart-chart-note';note.textContent='Unusually long gaps in a stream are not connected.';container.append(note);}
 }
 function renderChartColors(){
   const box=$('chart-colors');box.replaceChildren();
