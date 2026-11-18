@@ -92,6 +92,7 @@ function choiceList(options,current){
   for(const [value,text] of list){const chip=document.createElement('em');chip.textContent=text;if(value===current){chip.className='on';chip.setAttribute('aria-current','true');}chips.append(chip);}
   return chips;
 }
+function whenShort(value){if(!value)return '—';const date=new Date(value);return Number.isNaN(date.getTime())?'—':date.toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}
 function when(value){if(!value)return '—';const date=new Date(value);return Number.isNaN(date.getTime())?'—':date.toLocaleString();}
 function renderLive(){
   const strip=$('status-strip'), hero=$('live-status'), details=$('live-details'), d=deviceData, side=sides.find(s=>s.side===selected);
@@ -117,14 +118,18 @@ function renderLive(){
   const running=side?.side==='left'?d?.leftNowHeating:side?.side==='right'?d?.rightNowHeating:null;
   line(thermal,`Currently ${side?.power===false?'—':level(side?.current)} · Running: ${yesNo(running)}`,'bento-subtext');
   const schedule=choiceList([['smart','Smart'],['timeBased','Timed']],side?.schedule_type||null);schedule.setAttribute('role','group');schedule.setAttribute('aria-label','Schedule types');thermal.append(schedule);hero.append(thermal);
+  // Grouped cards: each group has titled rows, and each row is a grid of label-over-value cells.
   const section=(title)=>{const group=document.createElement('section'),heading=document.createElement('h3'),body=document.createElement('div');heading.className='pod-section-heading';heading.textContent=title;body.className='pod-group';group.append(heading,body);details.append(group);return body;};
-  const stat=(parent,name,value)=>{const item=document.createElement('div'),label=document.createElement('span'),text=document.createElement('strong');item.className='pod-stat';label.textContent=name;text.textContent=value;item.append(label,text);parent.append(item);};
+  const row=(parent,title,cells)=>{const item=document.createElement('div'),name=document.createElement('span'),grid=document.createElement('div');
+    item.className='pod-row';name.className='pod-row-title';name.textContent=title;grid.className='pod-kv-grid';grid.style.setProperty('--cols',String(cells.length));
+    for(const [label,value] of cells){const cell=document.createElement('div'),key=document.createElement('span'),text=document.createElement('strong');cell.className='pod-kv';key.textContent=label;text.textContent=value;cell.append(key,text);grid.append(cell);}
+    item.append(name,grid);parent.append(item);};
   const presets=section('Schedule presets');
-  stat(presets,'Smart schedule',`Bedtime ${level(side?.smart?.bedTimeLevel)} · Early sleep ${level(side?.smart?.initialSleepLevel)} · Late sleep ${level(side?.smart?.finalSleepLevel)}`);
-  stat(presets,'Timed mode',`Level ${level(side?.timed?.level)} · Duration ${formatDuration(side?.timed?.durationSeconds)}`);
+  row(presets,'Smart schedule',[['Bedtime',level(side?.smart?.bedTimeLevel)],['Early sleep',level(side?.smart?.initialSleepLevel)],['Late sleep',level(side?.smart?.finalSleepLevel)]]);
+  row(presets,'Timed mode',[['Timed level',level(side?.timed?.level)],['Duration',formatDuration(side?.timed?.durationSeconds)]]);
   const hardware=section('Pod hardware & system');
-  stat(hardware,'Water & priming',`Priming: ${yesNo(d?.priming,'In progress','Not running')} · Needs priming: ${yesNo(d?.needsPriming)} · Last primed: ${when(d?.lastPrime)}`);
-  stat(hardware,'Connectivity & firmware',`Last heard: ${when(d?.lastHeard)} · Firmware updating: ${yesNo(d?.firmwareUpdating)}`);
+  row(hardware,'Water & priming',[['Priming',yesNo(d?.priming,'In progress','Not running')],['Needs priming',yesNo(d?.needsPriming)],['Last primed',whenShort(d?.lastPrime)]]);
+  row(hardware,'Connectivity & firmware',[['Last heard',whenShort(d?.lastHeard)],['Firmware updating',yesNo(d?.firmwareUpdating)]]);
 }
 let sessionRequest=0, sessionInFlight=null, sessionCheckedAt=null;
 // --- Session summary ---
