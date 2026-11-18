@@ -136,16 +136,20 @@ function seriesStats(night,key){const values=(Array.isArray(night?.series?.[key]
 function summaryParts(key,suffix,stats){if(!stats)return {avg:'—',range:'No data'};const n=value=>isTempStream(key)?String(Math.round(chartNumber(key,value))):key==='respiratoryRate'?chartNumber(key,value).toFixed(1):String(Math.round(value));const tail=isTempStream(key)?`°${unit==='F'?'F':'C'}`:suffix;const rangeTail=isTempStream(key)?'°':'';return {avg:`${n(stats.avg)}${tail}`,range:`${n(stats.min)}–${n(stats.max)}${rangeTail}`};}
 function stageTotals(night){const totals={deep:0,rem:0,light:0,awake:0};for(const s of Array.isArray(night?.stages)?night.stages:[])if(s&&s.stage in totals&&Number.isFinite(s.duration))totals[s.stage]+=s.duration;return totals;}
 function renderNightSwitcher(list){
-  const box=$('night-switcher');box.replaceChildren();box.hidden=list.length<2;if(list.length<2)return;
-  const prev=document.createElement('button'),next=document.createElement('button'),label=document.createElement('span');
-  prev.type=next.type='button';prev.className=next.className='night-step';prev.textContent='‹';next.textContent='›';
-  prev.setAttribute('aria-label','Previous (older) night');next.setAttribute('aria-label','Next (newer) night');
-  prev.disabled=nightIndex>=list.length-1;next.disabled=nightIndex<=0;
-  label.className='night-label';label.setAttribute('aria-live','polite');label.textContent=nightLabel(list[nightIndex]);
-  prev.addEventListener('click',()=>{nightIndex=Math.min(list.length-1,nightIndex+1);renderSession();});
-  next.addEventListener('click',()=>{nightIndex=Math.max(0,nightIndex-1);renderSession();});
-  box.append(prev,label,next);
+  const box=$('night-switcher'),signature=JSON.stringify([selected,list.map(n=>[n?.start,n?.sleep_start,n?.sleep_end,n?.presence_end])]);
+  if(box.children[0]?.open&&box.children[0]._nightKeys===signature)return;
+  box.replaceChildren();box.hidden=list.length<2;if(list.length<2)return;
+  const menu=document.createElement('details'),label=document.createElement('summary'),choices=document.createElement('select');
+  menu.className='night-menu';menu._nightKeys=signature;const labels=list.map(nightLabel),uniqueLabel=index=>labels.filter(value=>value===labels[index]).length>1?`${labels[index]} · ${clockTime(list[index]?.sleep_start||list[index]?.start)}`:labels[index];
+  label.className='night-label';label.setAttribute('aria-label',`Choose session: ${uniqueLabel(nightIndex)}`);label.textContent=uniqueLabel(nightIndex);
+  choices.className='night-options';choices.size=Math.min(10,list.length);choices.setAttribute('aria-label','Choose session, newest first');
+  list.forEach((night,index)=>{const option=document.createElement('option');option.value=String(index);option.textContent=uniqueLabel(index);option.selected=index===nightIndex;choices.append(option);});
+  const commit=()=>{const index=Number(choices.value);if(!Number.isInteger(index)||index<0||index>=list.length)return;nightIndex=index;menu.open=false;renderSession();box.querySelector?.('summary')?.focus();};
+  choices.addEventListener('change',commit);
+  choices.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();menu.open=false;label.focus();return;}if(event.key==='Enter'||event.key===' '){event.preventDefault();commit();return;}const steps={ArrowUp:-1,ArrowDown:1,PageUp:-10,PageDown:10};if(event.key in steps||event.key==='Home'||event.key==='End'){event.preventDefault();choices.selectedIndex=event.key==='Home'?0:event.key==='End'?list.length-1:Math.max(0,Math.min(list.length-1,choices.selectedIndex+steps[event.key]));}});
+  menu.append(label,choices);box.append(menu);
 }
+document.addEventListener?.('click',event=>{const box=$('night-switcher');if(box&&!box.contains?.(event.target)){const menu=box.querySelector?.('.night-menu');if(menu)menu.open=false;}});
 function renderStages(night){
   const box=$('session-stages-content');box.replaceChildren();
   const totals=stageTotals(night),all=STAGE_DEFS.reduce((sum,[k])=>sum+totals[k],0);
@@ -180,9 +184,9 @@ function renderSession(){
   const session=sessionSide===selected?sessionData:null,list=nightList(session),night=list[nightIndex]||null;
   $('session-updated').textContent=[selected?`${selected.charAt(0).toUpperCase()+selected.slice(1)} side`:'',sessionSide===selected&&sessionCheckedAt?`Checked ${when(sessionCheckedAt)}`:''].filter(Boolean).join(' · ');
   renderNightSwitcher(list);
-  const pill=$('session-state');pill.replaceChildren();
-  const state=night?.incomplete===true?'Incomplete':night?.incomplete===false?'Complete':'Not reported',dot=document.createElement('i'),text=document.createElement('span');
-  dot.className=night?.incomplete===false?'status-tag-dot good':night?.incomplete===true?'status-tag-dot pending':'status-tag-dot';dot.setAttribute('aria-hidden','true');text.textContent=state;pill.append(dot,text);
+  const pill=$('session-state');pill.replaceChildren();pill.hidden=typeof night?.incomplete!=='boolean';
+  if(!pill.hidden){const dot=document.createElement('i'),text=document.createElement('span');
+    dot.className=night.incomplete?'status-tag-dot pending':'status-tag-dot good';dot.setAttribute('aria-hidden','true');text.textContent=night.incomplete?'Incomplete':'Complete';pill.append(dot,text);}
   const totals=stageTotals(night),asleep=Number.isFinite(night?.stage_summary?.sleepDuration)?night.stage_summary.sleepDuration:(totals.deep+totals.rem+totals.light||null);
   renderScoreRing($('summary-score'),night?.score);
   $('summary-asleep').textContent=Number.isFinite(asleep)?`${formatDuration(asleep)} asleep`:'Asleep —';
