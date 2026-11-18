@@ -102,6 +102,7 @@ function renderLive(){
   tag(yesNo(d?.online,'Online','Offline')==='—'?'Connection unknown':yesNo(d?.online,'Online','Offline'),d?.online);
   tag(yesNo(d?.hasWater,'Water','Water low / absent')==='—'?'Water unknown':yesNo(d?.hasWater,'Water','Water low / absent'),d?.hasWater);
   const fw=document.createElement('span');fw.className='status-firmware';fw.textContent=`Firmware ${d?.firmwareVersion||'—'}`;strip.append(fw);
+  $('pod-side-heading').textContent=side?.side?`This side · ${side.side.charAt(0).toUpperCase()+side.side.slice(1)}`:'This side';
   const card=(title)=>{const box=document.createElement('div'),label=document.createElement('span');box.className='bento-card';label.className='bento-label';label.textContent=title;box.append(label);return box;};
   const line=(box,value,cls)=>{const text=document.createElement('span');text.className=cls;text.textContent=value;box.append(text);};
   const modes=[['off','Off'],['smart:bedtime','Bedtime'],['smart:initial','Early sleep'],['smart:final','Late sleep']];
@@ -111,16 +112,19 @@ function renderLive(){
   line(active,side?.power===false?'Off':side?.power===true?`On · ${mode}`:'Power unknown',side?.power===true?'bento-value active':'bento-value');
   const powerChoices=choiceList([[false,'Off'],[true,'On']],typeof side?.power==='boolean'?side.power:null);powerChoices.setAttribute('role','group');powerChoices.setAttribute('aria-label','Power states');active.append(powerChoices);
   const modeChoices=choiceList(modes,side?.mode||null);modeChoices.setAttribute('role','group');modeChoices.setAttribute('aria-label','Known modes');active.append(modeChoices);
-  line(active,`Started ${when(side?.mode_started)} · Side: ${side?.side?side.side.charAt(0).toUpperCase()+side.side.slice(1):'—'}`,'bento-subtext');hero.append(active);
+  line(active,`Started ${when(side?.mode_started)}`,'bento-subtext');hero.append(active);
   const thermal=card('Thermal');line(thermal,level(side?.target),'bento-value');
-  line(thermal,`Currently ${side?.power===false?'—':level(side?.current)}`,'bento-subtext');
+  const running=side?.side==='left'?d?.leftNowHeating:side?.side==='right'?d?.rightNowHeating:null;
+  line(thermal,`Currently ${side?.power===false?'—':level(side?.current)} · Running: ${yesNo(running)}`,'bento-subtext');
   const schedule=choiceList([['smart','Smart'],['timeBased','Timed']],side?.schedule_type||null);schedule.setAttribute('role','group');schedule.setAttribute('aria-label','Schedule types');thermal.append(schedule);hero.append(thermal);
-  const stat=(name,value)=>{const item=document.createElement('div'),label=document.createElement('span'),text=document.createElement('strong');label.textContent=name;text.textContent=value;item.append(label,text);details.append(item);};
-  stat('Bedtime level',level(side?.smart?.bedTimeLevel));stat('Early sleep level',level(side?.smart?.initialSleepLevel));stat('Late sleep level',level(side?.smart?.finalSleepLevel));
-  stat('Timed level',level(side?.timed?.level));stat('Timed duration (configured)',Number.isFinite(side?.timed?.durationSeconds)?`${side.timed.durationSeconds} seconds`:'—');
-  stat('Priming',yesNo(d?.priming,'In progress','Not running'));stat('Needs priming',yesNo(d?.needsPriming));stat('Firmware updating',yesNo(d?.firmwareUpdating));
-  stat('Last heard',when(d?.lastHeard));stat('Last primed',when(d?.lastPrime));
-  const running=side?.side==='left'?d?.leftNowHeating:side?.side==='right'?d?.rightNowHeating:null;stat('Temperature running',yesNo(running));
+  const section=(title)=>{const group=document.createElement('section'),heading=document.createElement('h3'),body=document.createElement('div');heading.className='pod-section-heading';heading.textContent=title;body.className='pod-group';group.append(heading,body);details.append(group);return body;};
+  const stat=(parent,name,value)=>{const item=document.createElement('div'),label=document.createElement('span'),text=document.createElement('strong');item.className='pod-stat';label.textContent=name;text.textContent=value;item.append(label,text);parent.append(item);};
+  const presets=section('Schedule presets');
+  stat(presets,'Smart schedule',`Bedtime ${level(side?.smart?.bedTimeLevel)} · Early sleep ${level(side?.smart?.initialSleepLevel)} · Late sleep ${level(side?.smart?.finalSleepLevel)}`);
+  stat(presets,'Timed mode',`Level ${level(side?.timed?.level)} · Duration ${formatDuration(side?.timed?.durationSeconds)}`);
+  const hardware=section('Pod hardware & system');
+  stat(hardware,'Water & priming',`Priming: ${yesNo(d?.priming,'In progress','Not running')} · Needs priming: ${yesNo(d?.needsPriming)} · Last primed: ${when(d?.lastPrime)}`);
+  stat(hardware,'Connectivity & firmware',`Last heard: ${when(d?.lastHeard)} · Firmware updating: ${yesNo(d?.firmwareUpdating)}`);
 }
 let sessionRequest=0, sessionInFlight=null, sessionCheckedAt=null;
 // --- Session summary ---
@@ -275,14 +279,17 @@ function renderSessionChart(session){
 function commitStreamOrder(){saveChartPrefs();renderChartColors();if(typeof renderSession==='function')renderSession();else renderSessionChart();}
 // Drag a row by its handle (mouse or touch) to reorder; the handle also takes the arrow keys.
 function attachRowDrag(handle,row,box,key){
-  handle.addEventListener('pointerdown',event=>{
-    if(readOnly)return;event.preventDefault();try{if(handle.setPointerCapture)handle.setPointerCapture(event.pointerId);}catch{}row.className+=' dragging';
+  // Grab anywhere on the row except its colour swatch. Moving the row in the DOM drops pointer capture,
+  // so the move/up listeners live on the document rather than on the element being moved.
+  row.addEventListener('pointerdown',event=>{
+    if(readOnly||event.button>0||(event.target&&event.target.closest&&event.target.closest('input')))return;
+    event.preventDefault();row.className+=' dragging';
     const rows=()=>[...box.querySelectorAll('.chart-color-row')];
     const move=e=>{const list=rows();let target=list.length-1;for(let i=0;i<list.length;i++){const r=list[i].getBoundingClientRect();if(e.clientY<r.top+r.height/2){target=i;break;}}
       const current=list.indexOf(row);if(target!==current)box.insertBefore(row,target>current?list[target].nextSibling:list[target]);};
-    const end=()=>{handle.removeEventListener('pointermove',move);handle.removeEventListener('pointerup',end);handle.removeEventListener('pointercancel',end);row.className=row.className.replace(' dragging','');
+    const end=()=>{document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',end);document.removeEventListener('pointercancel',end);row.className=row.className.replace(' dragging','');
       const order=rows().map(r=>r._key);if(order.join()!==chartPrefs.order.join()){chartPrefs.order=order;commitStreamOrder();}};
-    handle.addEventListener('pointermove',move);handle.addEventListener('pointerup',end);handle.addEventListener('pointercancel',end);
+    document.addEventListener('pointermove',move);document.addEventListener('pointerup',end);document.addEventListener('pointercancel',end);
   });
   handle.addEventListener('keydown',event=>{
     if(readOnly||(event.key!=='ArrowUp'&&event.key!=='ArrowDown'))return;event.preventDefault();

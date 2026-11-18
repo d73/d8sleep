@@ -18,10 +18,10 @@ function element(tag) {
 
 function setup(session, { unit = 'C', readOnly = false } = {}) {
   const ids = { 'heart-chart-content': element('div'), 'chart-readout': element('span'), 'chart-chips': element('div'), 'chart-colors': element('div'), 'chart-colors-btn': element('button'), 'stage-colors': element('div'), 'stage-colors-btn': element('button') };
-  const fetches = [], timers = [];
+  const fetches = [], timers = [], docHandlers = {};
   const ctx = vm.createContext({
     $: id => ids[id], unit, readOnly,
-    document: { createElement: element, createElementNS: (_, tag) => element(tag) },
+    document: { createElement: element, createElementNS: (_, tag) => element(tag), addEventListener(type, fn) { (docHandlers[type] ||= []).push(fn); }, removeEventListener(type, fn) { docHandlers[type] = (docHandlers[type] || []).filter(f => f !== fn); } },
     fetch: async (url, init) => { fetches.push({ url, init }); return { ok: true }; },
     api: async () => ({ prefs: {} }),
     setTimeout: fn => { timers.push(fn); return timers.length; }, clearTimeout: () => {},
@@ -30,7 +30,7 @@ function setup(session, { unit = 'C', readOnly = false } = {}) {
   ctx.renderSessionChart(session);
   const svg = () => ids['heart-chart-content'].children[0];
   const prefs = () => vm.runInContext('chartPrefs', ctx);
-  return { ctx, ids, svg, fetches, timers, prefs };
+  return { ctx, ids, svg, fetches, timers, prefs, docHandlers };
 }
 
 const minute = i => new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString();
@@ -230,4 +230,39 @@ test('stored order is validated and completed', () => {
   const t = setup(null);
   assert.deepEqual([...t.ctx.normalizeChartPrefs({ order: ['hrv', 'bogus', 'hrv', 'tempRoomC'] }).order], ['hrv', 'tempRoomC', 'heartRate', 'tempBedC', 'respiratoryRate']);
   assert.deepEqual([...t.ctx.normalizeChartPrefs(null).order], ['heartRate', 'hrv', 'tempBedC', 'respiratoryRate', 'tempRoomC']);
+});
+
+test('dragging a row reorders through document-level listeners, so moving the row cannot lose the drag', () => {
+  const t = setup(null);
+  const box = t.ids['chart-colors'];
+  t.ctx.renderChartColors();
+  const rows = () => box.children.filter(c => c._key);
+  box.querySelectorAll = () => rows();
+  box.insertBefore = (node, ref) => { box.children = box.children.filter(c => c !== node); const i = ref ? box.children.indexOf(ref) : box.children.length; box.children.splice(i < 0 ? box.children.length : i, 0, node); };
+  rows().forEach((r, i) => { r.getBoundingClientRect = () => ({ top: i * 36 + 300, height: 28 }); r.nextSibling = box.children[box.children.indexOf(r) + 1] || null; });
+  const grab = rows()[3];                                           // Resp Rate
+  let prevented = false;
+  grab.handlers.pointerdown({ button: 0, target: { closest: () => null }, preventDefault() { prevented = true; } });
+  assert.equal(prevented, true);
+  assert.ok(t.docHandlers.pointermove?.length === 1 && t.docHandlers.pointerup?.length === 1);
+  assert.equal(grab.handlers.pointermove, undefined);               // nothing hangs off the moving element
+  t.docHandlers.pointermove[0]({ clientY: 310 });                   // pointer above the first row
+  assert.equal(box.children[0]._key, 'respiratoryRate');
+  t.docHandlers.pointerup[0]();
+  assert.deepEqual([...t.prefs().order].slice(0, 2), ['respiratoryRate', 'heartRate']);
+  assert.deepEqual(t.docHandlers.pointermove, []);                  // listeners removed after the drop
+  t.timers[t.timers.length - 1]();
+  assert.deepEqual(JSON.parse(t.fetches[0].init.body).order.slice(0, 2), ['respiratoryRate', 'heartRate']);
+});
+
+test('pressing on the colour swatch or on a read-only list does not start a drag', () => {
+  const t = setup(null);
+  t.ctx.renderChartColors();
+  const row = t.ids['chart-colors'].children[0];
+  row.handlers.pointerdown({ button: 0, target: { closest: () => ({}) }, preventDefault() { throw Error('swatch must stay a normal click'); } });
+  assert.equal(t.docHandlers.pointermove, undefined);
+  const locked = setup(null, { readOnly: true });
+  locked.ctx.renderChartColors();
+  locked.ids['chart-colors'].children[0].handlers.pointerdown({ button: 0, target: { closest: () => null }, preventDefault() { throw Error('read-only'); } });
+  assert.equal(locked.docHandlers.pointermove, undefined);
 });
