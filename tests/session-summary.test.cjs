@@ -16,12 +16,12 @@ function element(tag) {
 }
 const ids = {};
 function setup(session, { unit = 'C', readOnly = false } = {}) {
-  for (const id of ['session-status', 'session-meta', 'session-respiratory', 'session-updated', 'night-switcher', 'session-stages-content', 'stage-colors',
+  for (const id of ['session-state', 'summary-score', 'summary-asleep', 'summary-window', 'session-bio', 'session-updated', 'night-switcher', 'session-stages-content', 'stage-colors',
     'heart-chart-content', 'chart-readout', 'chart-chips', 'chart-colors']) ids[id] = element('div');
   const fetches = [], timers = [];
   const ctx = vm.createContext({
     $: id => ids[id], unit, readOnly, selected: 'left', sessionSide: 'left', sessionData: session, sessionCheckedAt: null,
-    when: v => String(v), document: { createElement: element, createElementNS: (_, tag) => element(tag) },
+    when: v => String(v), document: { createElement: element, createElementNS: (_, tag) => element(tag), createTextNode: text => ({ tag: '#text', textContent: text, children: [] }) },
     fetch: async (url, init) => { fetches.push({ url, init }); return { ok: true }; }, api: async () => ({}),
     setTimeout: fn => { timers.push(fn); return timers.length; }, clearTimeout: () => {},
   });
@@ -39,16 +39,20 @@ const night = (start, overrides = {}) => ({
 
 test('score, duration, window, stages and average / min-max cards render for the selected night', () => {
   const t = setup({ ...night('2026-11-14T22:00:00Z'), sessions: [night('2026-11-14T22:00:00Z'), night('2026-11-13T22:00:00Z', { score: null })] });
-  const cards = texts(ids['session-status']).join('|');
-  assert.match(cards, /82/);
-  assert.match(cards, /4h 30m/);
-  assert.match(cards, /In bed 7h 30m/);
+  assert.equal(texts(ids['summary-score']).join('|'), '82');
+  assert.equal(ids['summary-score'].attrs['aria-label'], 'Sleep score 82');
+  assert.equal(ids['summary-asleep'].textContent, '4h 30m asleep');
+  assert.match(ids['summary-window'].textContent, /–/);
+  assert.match(ids['summary-window'].textContent, /7h 30m in bed/);
+  assert.equal(texts(ids['session-state']).join('|'), 'Complete');
   const legend = texts(ids['session-stages-content']).join('|');
-  assert.match(legend, /Deep/); assert.match(legend, /REM/); assert.match(legend, /1h 00m · 21%/);
-  const stats = texts(ids['session-respiratory']).join('|');
-  assert.match(stats, /60 bpm · 50–70/);
-  assert.match(stats, /25°C · 20–30°C|25°C · 20–30/);
-  assert.match(stats, /Resp rate · avg, min–max\|Not available/);
+  assert.match(legend, /Deep 1h 00m \(21%\)/); assert.match(legend, /REM 1h 30m \(32%\)/); assert.match(legend, /Awake 10m \(4%\)/);
+  const bio = ids['session-bio'].children.map(cell => texts(cell).join('/'));
+  assert.equal(bio.length, 5);
+  assert.equal(bio[0], 'HR/60 bpm/50–70');
+  assert.equal(bio[1], 'HRV/—/No data');
+  assert.equal(bio[2], 'Resp/—/No data');
+  assert.equal(bio[3], 'Bed/25°C/20–30°');
 });
 
 test('night switcher steps through nights, updates everything, and disables at both ends', () => {
@@ -59,14 +63,23 @@ test('night switcher steps through nights, updates everything, and disables at b
   [prev, label, next] = ids['night-switcher'].children;
   assert.equal(prev.disabled, true); assert.equal(next.disabled, false);
   assert.equal(vm.runInContext('nightIndex', t.ctx), 1);
-  assert.match(texts(ids['session-status']).join('|'), /—\|Not reported for this night/);
+  assert.equal(texts(ids['summary-score']).join('|'), '—');
+  assert.equal(ids['summary-score'].attrs['aria-label'], 'Sleep score not reported');
   next.handlers.click();
   assert.equal(vm.runInContext('nightIndex', t.ctx), 0);
 });
 
+test('respiratory average keeps its unit and one decimal', () => {
+  const resp = night('2026-11-14T22:00:00Z', { series: { respiratoryRate: [{ timestamp: '2026-11-14T22:00:00Z', value: 14 }, { timestamp: '2026-11-14T23:00:00Z', value: 15.4 }] } });
+  setup({ ...resp, sessions: [resp] });
+  const bio = ids['session-bio'].children.map(cell => texts(cell).join('/'));
+  assert.equal(bio[2], 'Resp/14.7 brpm/14.0–15.4');
+});
+
 test('Fahrenheit preference converts the temperature summary', () => {
   setup({ ...night('2026-11-14T22:00:00Z'), sessions: [night('2026-11-14T22:00:00Z')] }, { unit: 'F' });
-  assert.match(texts(ids['session-respiratory']).join('|'), /77°F · 68–86/);
+  const bio = ids['session-bio'].children.map(cell => texts(cell).join('/'));
+  assert.equal(bio[3], 'Bed/77°F/68–86°');
 });
 
 test('no session and missing stages show clear empty states', () => {

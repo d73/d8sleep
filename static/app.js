@@ -126,14 +126,14 @@ let sessionRequest=0, sessionInFlight=null, sessionCheckedAt=null;
 // --- Session summary ---
 let nightIndex=0;
 const STAGE_DEFS=[['deep','Deep'],['rem','REM'],['light','Light'],['awake','Awake']];
-const SUMMARY_STREAMS=[['heartRate','Heart rate',' bpm'],['hrv','HRV',' ms'],['respiratoryRate','Resp rate',' brpm'],['tempBedC','Bed temp',''],['tempRoomC','Room temp','']];
+const SUMMARY_STREAMS=[['heartRate','HR',' bpm'],['hrv','HRV',' ms'],['respiratoryRate','Resp',' brpm'],['tempBedC','Bed',''],['tempRoomC','Room','']];
 function formatDuration(seconds){if(!Number.isFinite(seconds)||seconds<0)return '—';const minutes=Math.round(seconds/60),hours=Math.floor(minutes/60);return hours?`${hours}h ${String(minutes%60).padStart(2,'0')}m`:`${minutes}m`;}
 function clockTime(value){const ms=Date.parse(value);return Number.isFinite(ms)?new Date(ms).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}):'—';}
 function dayLabel(value){const ms=Date.parse(value);return Number.isFinite(ms)?new Date(ms).toLocaleDateString(undefined,{month:'short',day:'numeric'}):'';}
 function nightLabel(night){const start=dayLabel(night?.sleep_start||night?.start),end=dayLabel(night?.sleep_end||night?.presence_end);if(!start)return 'No session';return end&&end!==start?`${start} – ${end}`:start;}
 function nightList(session){const list=Array.isArray(session?.sessions)&&session.sessions.length?session.sessions:(session?[session]:[]);if(nightIndex>=list.length)nightIndex=Math.max(0,list.length-1);return list;}
 function seriesStats(night,key){const values=(Array.isArray(night?.series?.[key])?night.series[key]:[]).map(p=>p&&p.value).filter(v=>typeof v==='number'&&Number.isFinite(v));if(!values.length)return null;let min=Infinity,max=-Infinity,sum=0;for(const v of values){min=Math.min(min,v);max=Math.max(max,v);sum+=v;}return {avg:sum/values.length,min,max};}
-function summaryText(key,suffix,stats){if(!stats)return 'Not available';const n=value=>isTempStream(key)?String(Math.round(chartNumber(key,value))):key==='respiratoryRate'?chartNumber(key,value).toFixed(1):String(Math.round(value));const tail=isTempStream(key)?`°${unit==='F'?'F':'C'}`:suffix;return `${n(stats.avg)}${tail} · ${n(stats.min)}–${n(stats.max)}`;}
+function summaryParts(key,suffix,stats){if(!stats)return {avg:'—',range:'No data'};const n=value=>isTempStream(key)?String(Math.round(chartNumber(key,value))):key==='respiratoryRate'?chartNumber(key,value).toFixed(1):String(Math.round(value));const tail=isTempStream(key)?`°${unit==='F'?'F':'C'}`:suffix;const rangeTail=isTempStream(key)?'°':'';return {avg:`${n(stats.avg)}${tail}`,range:`${n(stats.min)}–${n(stats.max)}${rangeTail}`};}
 function stageTotals(night){const totals={deep:0,rem:0,light:0,awake:0};for(const s of Array.isArray(night?.stages)?night.stages:[])if(s&&s.stage in totals&&Number.isFinite(s.duration))totals[s.stage]+=s.duration;return totals;}
 function renderNightSwitcher(list){
   const box=$('night-switcher');box.replaceChildren();box.hidden=list.length<2;if(list.length<2)return;
@@ -155,8 +155,8 @@ function renderStages(night){
   const blocks=(night.stages||[]).filter(s=>s&&Number.isFinite(s.duration)&&s.duration>0),span=blocks.reduce((sum,s)=>sum+s.duration,0)||1;
   for(const s of blocks){const seg=document.createElement('span');seg.className=`stage-seg stage-${s.stage}`;seg.style.width=`${s.duration/span*100}%`;if(s.stage in chartPrefs.stageColors)seg.style.background=chartPrefs.stageColors[s.stage];bar.append(seg);}
   const legend=document.createElement('div');legend.className='stage-legend';
-  for(const [key,label] of STAGE_DEFS){const item=document.createElement('div'),dot=document.createElement('i'),name=document.createElement('span'),value=document.createElement('strong');
-    item.className='stage-legend-item';dot.className='chart-chip-dot';dot.style.background=chartPrefs.stageColors[key];name.textContent=label;value.textContent=`${formatDuration(totals[key])} · ${Math.round(totals[key]/all*100)}%`;item.append(dot,name,value);legend.append(item);}
+  for(const [key,label] of STAGE_DEFS){const item=document.createElement('span'),dot=document.createElement('i');
+    item.className='stage-legend-item';dot.className='chart-chip-dot';dot.style.background=chartPrefs.stageColors[key];item.append(dot,document.createTextNode(`${label} ${formatDuration(totals[key])} (${Math.round(totals[key]/all*100)}%)`));legend.append(item);}
   box.append(bar,legend);
 }
 function renderStageColors(){
@@ -167,24 +167,31 @@ function renderStageColors(){
   const reset=document.createElement('button');reset.type='button';reset.className='chart-colors-reset';reset.textContent='Reset defaults';reset.disabled=readOnly;
   reset.addEventListener('click',()=>{chartPrefs.stageColors={...STAGE_DEFAULT_COLORS};saveChartPrefs();renderStageColors();renderSession();});box.append(reset);
 }
+function renderScoreRing(box,score){
+  box.replaceChildren();const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg'),has=Number.isFinite(score);
+  const node=(name,attrs)=>{const e=document.createElementNS(ns,name);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));return e;};
+  svg.setAttribute('viewBox','0 0 56 56');svg.setAttribute('aria-hidden','true');
+  svg.append(node('circle',{cx:28,cy:28,r:24,class:'score-ring-track'}));
+  if(has){const c=2*Math.PI*24;svg.append(node('circle',{cx:28,cy:28,r:24,class:'score-ring-arc','stroke-dasharray':`${(Math.max(0,Math.min(100,score))/100*c).toFixed(1)} ${c.toFixed(1)}`,transform:'rotate(-90 28 28)'}));}
+  const label=document.createElement('span');label.className='score-ring-value';label.textContent=has?String(Math.round(score)):'—';
+  box.setAttribute('aria-label',has?`Sleep score ${Math.round(score)}`:'Sleep score not reported');box.append(svg,label);
+}
 function renderSession(){
-  const grid=$('session-status'),meta=$('session-meta'),details=$('session-respiratory');grid.replaceChildren();meta.replaceChildren();details.replaceChildren();
   const session=sessionSide===selected?sessionData:null,list=nightList(session),night=list[nightIndex]||null;
-  $('session-updated').textContent=sessionSide===selected && sessionCheckedAt ? `Checked ${when(sessionCheckedAt)}` : '';
+  $('session-updated').textContent=[selected?`${selected.charAt(0).toUpperCase()+selected.slice(1)} side`:'',sessionSide===selected&&sessionCheckedAt?`Checked ${when(sessionCheckedAt)}`:''].filter(Boolean).join(' · ');
   renderNightSwitcher(list);
-  const state=night?.incomplete===true?'Incomplete':night?.incomplete===false?'Complete':'Not reported';
-  const status=document.createElement('span'),dot=document.createElement('i'),statusText=document.createElement('span');
-  status.className='status-tag';dot.className=night?.incomplete===false?'status-tag-dot good':night?.incomplete===true?'status-tag-dot pending':'status-tag-dot';dot.setAttribute('aria-hidden','true');statusText.textContent=state;status.append(dot,statusText);meta.append(status);
-  const side=document.createElement('span');side.className='status-firmware';side.textContent=`Side: ${selected?selected.charAt(0).toUpperCase()+selected.slice(1):'—'}`;meta.append(side);
-  const card=(label,value,sub)=>{const box=document.createElement('div'),heading=document.createElement('span'),strong=document.createElement('strong'),small=document.createElement('small');box.className='bento-card';heading.className='bento-label';heading.textContent=label;strong.className='bento-value';strong.textContent=value;small.className='bento-subtext';small.textContent=sub;box.append(heading,strong,small);grid.append(box);};
+  const pill=$('session-state');pill.replaceChildren();
+  const state=night?.incomplete===true?'Incomplete':night?.incomplete===false?'Complete':'Not reported',dot=document.createElement('i'),text=document.createElement('span');
+  dot.className=night?.incomplete===false?'status-tag-dot good':night?.incomplete===true?'status-tag-dot pending':'status-tag-dot';dot.setAttribute('aria-hidden','true');text.textContent=state;pill.append(dot,text);
   const totals=stageTotals(night),asleep=Number.isFinite(night?.stage_summary?.sleepDuration)?night.stage_summary.sleepDuration:(totals.deep+totals.rem+totals.light||null);
-  card('Sleep score',Number.isFinite(night?.score)?String(Math.round(night.score)):'—',Number.isFinite(night?.score)?'Reported by the Pod':'Not reported for this night');
-  card('Asleep',formatDuration(asleep),`In bed ${formatDuration(Number.isFinite(night?.duration)?night.duration:night?.stage_summary?.totalDuration)}`);
-  const windowCard=document.createElement('div'),windowLabel=document.createElement('span'),windowValue=document.createElement('strong');
-  windowCard.className='bento-card bento-wide';windowLabel.className='bento-label';windowLabel.textContent='Sleep window';windowValue.className='bento-value';
-  windowValue.textContent=night?.sleep_start&&night?.sleep_end?`${clockTime(night.sleep_start)} – ${clockTime(night.sleep_end)}`:'—';windowCard.append(windowLabel,windowValue);grid.append(windowCard);
+  renderScoreRing($('summary-score'),night?.score);
+  $('summary-asleep').textContent=Number.isFinite(asleep)?`${formatDuration(asleep)} asleep`:'Asleep —';
+  const inBed=Number.isFinite(night?.duration)?night.duration:night?.stage_summary?.totalDuration,window=night?.sleep_start&&night?.sleep_end?`${clockTime(night.sleep_start)} – ${clockTime(night.sleep_end)}`:'';
+  $('summary-window').textContent=[window,Number.isFinite(inBed)?`${formatDuration(inBed)} in bed`:''].filter(Boolean).join(' · ')||'Sleep window not reported';
   renderStages(night);
-  for(const [key,label,suffix] of SUMMARY_STREAMS){const item=document.createElement('div'),name=document.createElement('span'),value=document.createElement('strong');name.textContent=`${label} · avg, min–max`;value.textContent=summaryText(key,suffix,seriesStats(night,key));item.append(name,value);details.append(item);}
+  const bio=$('session-bio');bio.replaceChildren();
+  for(const [key,label,suffix] of SUMMARY_STREAMS){const cell=document.createElement('div'),name=document.createElement('span'),value=document.createElement('strong'),range=document.createElement('small'),parts=summaryParts(key,suffix,seriesStats(night,key));
+    cell.className='bio-cell';name.textContent=label;value.textContent=parts.avg;range.textContent=parts.range;cell.append(name,value,range);bio.append(cell);}
   renderSessionChart(night);
 }
 // --- Session chart ---
