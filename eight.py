@@ -148,6 +148,15 @@ class EightClient:
         metrics = {}
         heart_rate_series = []
         all_series = {}
+        def clean(samples):
+            if not isinstance(samples, list):
+                return []
+            valid = [x for x in samples if isinstance(x, (list, tuple)) and len(x) >= 2
+                     and timestamp(x[0]) is not None and isinstance(x[1], (int, float))
+                     and not isinstance(x[1], bool) and math.isfinite(x[1])]
+            valid.sort(key=lambda x: timestamp(x[0]))
+            return valid
+
         for key in ('heartRate', 'hrv', 'respiratoryRate', 'tempBedC', 'tempRoomC'):
             samples = series.get(key) or []
             if not isinstance(samples, list):
@@ -165,6 +174,10 @@ class EightClient:
             else:
                 metrics[key] = None
                 all_series[key] = []
+        # respiratoryRate holds one nightly value; the hourly curve is nemeanRespiratoryRate.
+        hourly = clean(series.get('nemeanRespiratoryRate'))
+        if len(hourly) > len(all_series.get('respiratoryRate', [])):
+            all_series['respiratoryRate'] = [{'timestamp': point[0], 'value': point[1]} for point in hourly]
         return {'start': session.get('ts'), 'presence_end': session.get('presenceEnd'),
                 'incomplete': session.get('incomplete') if isinstance(session.get('incomplete'), bool) else None,
                 'metrics': metrics, 'heart_rate_series': heart_rate_series, 'series': all_series}

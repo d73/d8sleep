@@ -106,6 +106,19 @@ class ClientTests(unittest.TestCase):
         self.assertNotIn('device', result)
         with self.assertRaises(ValueError): self.client.session_biometrics('unknown')
 
+    def test_respiratory_chart_uses_the_hourly_series_when_the_nightly_value_is_single(self):
+        original = self.client.transport
+        def transport(method, url, payload, token):
+            if url.endswith('/intervals'):
+                return {'intervals': [{'ts': '2026-01-02T00:00:00Z', 'timeseries': {
+                    'respiratoryRate': [['2026-01-02T00:30:00Z', 15.5]],
+                    'nemeanRespiratoryRate': [['2026-01-02T01:00:00Z', 16.0], ['2026-01-02T00:00:00Z', 15.0], ['bad', 1]]}}]}
+            return original(method, url, payload, token)
+        self.client.transport = transport
+        result = self.client.session_biometrics('left')
+        self.assertEqual(result['metrics']['respiratoryRate']['value'], 15.5)  # snapshot card unchanged
+        self.assertEqual(result['series']['respiratoryRate'], [{'timestamp': '2026-01-02T00:00:00Z', 'value': 15.0}, {'timestamp': '2026-01-02T01:00:00Z', 'value': 16.0}])
+
     def test_session_biometrics_empty_response(self):
         original = self.client.transport
         self.client.transport = lambda method,url,payload,token: {'intervals': []} if url.endswith('/intervals') else original(method,url,payload,token)
