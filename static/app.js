@@ -137,14 +137,13 @@ function summaryParts(key,suffix,stats){if(!stats)return {avg:'—',range:'No da
 function stageTotals(night){const totals={deep:0,rem:0,light:0,awake:0};for(const s of Array.isArray(night?.stages)?night.stages:[])if(s&&s.stage in totals&&Number.isFinite(s.duration))totals[s.stage]+=s.duration;return totals;}
 function renderNightSwitcher(list){
   const box=$('night-switcher');box.replaceChildren();box.hidden=list.length<2;if(list.length<2)return;
-  const prev=document.createElement('button'),next=document.createElement('button'),label=document.createElement('span');
-  prev.type=next.type='button';prev.className=next.className='night-step';prev.textContent='‹';next.textContent='›';
-  prev.setAttribute('aria-label','Previous (older) night');next.setAttribute('aria-label','Next (newer) night');
-  prev.disabled=nightIndex>=list.length-1;next.disabled=nightIndex<=0;
-  label.className='night-label';label.setAttribute('aria-live','polite');label.textContent=nightLabel(list[nightIndex]);
-  prev.addEventListener('click',()=>{nightIndex=Math.min(list.length-1,nightIndex+1);renderSession();});
-  next.addEventListener('click',()=>{nightIndex=Math.max(0,nightIndex-1);renderSession();});
-  box.append(prev,label,next);
+  const menu=document.createElement('details'),label=document.createElement('summary'),choices=document.createElement('select');
+  menu.className='night-menu';label.className='night-label';label.setAttribute('aria-label',`Choose session: ${nightLabel(list[nightIndex])}`);label.textContent=nightLabel(list[nightIndex]);
+  choices.className='night-options';choices.size=Math.min(10,list.length);choices.setAttribute('aria-label','Choose session, newest first');
+  list.forEach((night,index)=>{const option=document.createElement('option');option.value=String(index);option.textContent=nightLabel(night);option.selected=index===nightIndex;choices.append(option);});
+  choices.addEventListener('change',()=>{const index=Number(choices.value);if(!Number.isInteger(index)||index<0||index>=list.length)return;nightIndex=index;renderSession();box.querySelector?.('summary')?.focus();});
+  choices.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();menu.open=false;label.focus();}});
+  menu.append(label,choices);box.append(menu);
 }
 function renderStages(night){
   const box=$('session-stages-content');box.replaceChildren();
@@ -180,9 +179,9 @@ function renderSession(){
   const session=sessionSide===selected?sessionData:null,list=nightList(session),night=list[nightIndex]||null;
   $('session-updated').textContent=[selected?`${selected.charAt(0).toUpperCase()+selected.slice(1)} side`:'',sessionSide===selected&&sessionCheckedAt?`Checked ${when(sessionCheckedAt)}`:''].filter(Boolean).join(' · ');
   renderNightSwitcher(list);
-  const pill=$('session-state');pill.replaceChildren();
-  const state=night?.incomplete===true?'Incomplete':night?.incomplete===false?'Complete':'Not reported',dot=document.createElement('i'),text=document.createElement('span');
-  dot.className=night?.incomplete===false?'status-tag-dot good':night?.incomplete===true?'status-tag-dot pending':'status-tag-dot';dot.setAttribute('aria-hidden','true');text.textContent=state;pill.append(dot,text);
+  const pill=$('session-state');pill.replaceChildren();pill.hidden=typeof night?.incomplete!=='boolean';
+  if(!pill.hidden){const dot=document.createElement('i'),text=document.createElement('span');
+    dot.className=night.incomplete?'status-tag-dot pending':'status-tag-dot good';dot.setAttribute('aria-hidden','true');text.textContent=night.incomplete?'Incomplete':'Complete';pill.append(dot,text);}
   const totals=stageTotals(night),asleep=Number.isFinite(night?.stage_summary?.sleepDuration)?night.stage_summary.sleepDuration:(totals.deep+totals.rem+totals.light||null);
   renderScoreRing($('summary-score'),night?.score);
   $('summary-asleep').textContent=Number.isFinite(asleep)?`${formatDuration(asleep)} asleep`:'Asleep —';

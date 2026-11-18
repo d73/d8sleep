@@ -55,18 +55,32 @@ test('score, duration, window, stages and average / min-max cards render for the
   assert.equal(bio[3], 'Bed/25°C/20–30°');
 });
 
-test('night switcher steps through nights, updates everything, and disables at both ends', () => {
+test('session dropdown lists newest first and switches every summary', () => {
   const t = setup({ ...night('2026-11-14T22:00:00Z'), sessions: [night('2026-11-14T22:00:00Z'), night('2026-11-13T22:00:00Z', { score: null })] });
-  let [prev, label, next] = ids['night-switcher'].children;
-  assert.equal(prev.disabled, false); assert.equal(next.disabled, true);
-  prev.handlers.click();
-  [prev, label, next] = ids['night-switcher'].children;
-  assert.equal(prev.disabled, true); assert.equal(next.disabled, false);
+  let [menu] = ids['night-switcher'].children;
+  let [label, choices] = menu.children;
+  assert.equal(choices.size, 2);assert.equal(choices.children[0].selected,true);assert.equal(choices.children[1].selected,false);
+  choices.value='1';choices.handlers.change();
+  [menu] = ids['night-switcher'].children;[label, choices]=menu.children;
+  assert.equal(choices.children[1].selected,true);
   assert.equal(vm.runInContext('nightIndex', t.ctx), 1);
   assert.equal(texts(ids['summary-score']).join('|'), '—');
   assert.equal(ids['summary-score'].attrs['aria-label'], 'Sleep score not reported');
-  next.handlers.click();
+  choices.value='0';choices.handlers.change();
   assert.equal(vm.runInContext('nightIndex', t.ctx), 0);
+});
+
+test('session list shows at most ten rows and retains all nights', () => {
+  const nights=Array.from({length:14},(_,i)=>night(new Date(Date.UTC(2026,10,20-i,22)).toISOString()));
+  const t=setup({...nights[0],sessions:nights});const [menu]=ids['night-switcher'].children;const [,choices]=menu.children;
+  assert.equal(choices.size,10);assert.equal(choices.children.length,14);assert.equal(choices.children[0].value,'0');
+  choices.value='13';choices.handlers.change();assert.equal(vm.runInContext('nightIndex',t.ctx),13);
+});
+
+test('completeness badge is hidden unless the API reports a boolean', () => {
+  setup({ ...night('2026-11-14T22:00:00Z', { incomplete: null }) });assert.equal(ids['session-state'].hidden,true);
+  setup({ ...night('2026-11-14T22:00:00Z', { incomplete: true }) });assert.equal(ids['session-state'].hidden,false);assert.equal(texts(ids['session-state']).join('|'),'Incomplete');
+  setup({ ...night('2026-11-14T22:00:00Z', { incomplete: false }) });assert.equal(ids['session-state'].hidden,false);assert.equal(texts(ids['session-state']).join('|'),'Complete');
 });
 
 test('respiratory average keeps its unit and one decimal', () => {
