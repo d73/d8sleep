@@ -238,3 +238,7 @@ main{padding-top:16px}.card-identity{display:flex;align-items:center;gap:10px;mi
 @media (max-width:400px){.bio-strip{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:12px}.bio-cell:nth-child(4){border-left:0}.bio-cell strong{font-size:13px}}
 .night-menu{position:relative}.night-menu summary{cursor:pointer;list-style:none}.night-menu summary::-webkit-details-marker{display:none}.night-menu summary::after{content:' ▾'}.night-menu summary:focus-visible,.night-options:focus-visible{outline:2px solid var(--app-accent,#b9a7ef);outline-offset:2px}.night-options{position:absolute;top:calc(100% + 4px);left:0;z-index:30;min-width:160px;max-width:80vw;background:#202733;color:#ecedf1;border:1px solid #596371;border-radius:8px;overflow-y:auto}.night-options option{padding:5px 8px}:root[data-theme=day] .night-options{background:#eef2f8;color:#26354a;border-color:#c5cfdd}
 #session-state[hidden]{display:none}
+.chart-readout.below{display:block;margin:8px 0 0;min-height:1.4em;text-align:center;font-size:12px}
+.chart-color-row{gap:8px}.chart-color-name{flex:1 1 auto}
+.drag-handle{border:0;background:transparent;color:inherit;opacity:.6;cursor:grab;font-size:14px;line-height:1;padding:4px 2px;touch-action:none;letter-spacing:-2px}.drag-handle:active{cursor:grabbing}.drag-handle:disabled{opacity:.25;cursor:not-allowed}
+.chart-color-row.dragging{opacity:.7;background:rgba(127,140,160,.15);border-radius:8px}

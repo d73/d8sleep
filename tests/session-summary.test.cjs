@@ -51,8 +51,8 @@ test('score, duration, window, stages and average / min-max cards render for the
   assert.equal(bio.length, 5);
   assert.equal(bio[0], 'HR/60 bpm/50–70');
   assert.equal(bio[1], 'HRV/—/No data');
-  assert.equal(bio[2], 'Resp/—/No data');
-  assert.equal(bio[3], 'Bed/25°C/20–30°');
+  assert.equal(bio[2], 'Bed/25°C/20–30°');
+  assert.equal(bio[3], 'Resp/—/No data');
 });
 
 test('session dropdown lists newest first and switches every summary', () => {
@@ -109,13 +109,13 @@ test('respiratory average keeps its unit and one decimal', () => {
   const resp = night('2026-11-14T22:00:00Z', { series: { respiratoryRate: [{ timestamp: '2026-11-14T22:00:00Z', value: 14 }, { timestamp: '2026-11-14T23:00:00Z', value: 15.4 }] } });
   setup({ ...resp, sessions: [resp] });
   const bio = ids['session-bio'].children.map(cell => texts(cell).join('/'));
-  assert.equal(bio[2], 'Resp/14.7 brpm/14.0–15.4');
+  assert.equal(bio[3], 'Resp/14.7 brpm/14.0–15.4');
 });
 
 test('Fahrenheit preference converts the temperature summary', () => {
   setup({ ...night('2026-11-14T22:00:00Z'), sessions: [night('2026-11-14T22:00:00Z')] }, { unit: 'F' });
   const bio = ids['session-bio'].children.map(cell => texts(cell).join('/'));
-  assert.equal(bio[3], 'Bed/77°F/68–86°');
+  assert.equal(bio[2], 'Bed/77°F/68–86°');
 });
 
 test('no session and missing stages show clear empty states', () => {

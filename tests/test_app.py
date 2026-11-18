@@ -254,6 +254,12 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(status, 200)
             self.assertEqual(data['prefs']['stageColors']['deep'], '#0a0b0c')
             self.assertEqual(data['prefs']['stageColors']['rem'], server.DEFAULT_STAGE_COLORS['rem'])
+            status, data = self.put({'order': ['tempBedC', 'hrv'], 'stageColors': {'deep': '#0A0B0C'}})  # a PUT replaces all preferences
+            self.assertEqual(status, 200)
+            self.assertEqual(data['prefs']['order'], ['tempBedC', 'hrv', 'heartRate', 'respiratoryRate', 'tempRoomC'])  # the rest follow in default order
+            self.assertEqual(server.load_prefs()['order'], data['prefs']['order'])
+            for bad in ({'order': ['nope']}, {'order': ['hrv', 'hrv']}, {'order': 'hrv'}):
+                self.assertEqual(self.put(bad)[0], 400, bad)
             for bad in ({'stageColors': {'deep': 'blue'}}, {'stageColors': {'bogus': '#000000'}}, {'stageColors': []}):
                 self.assertEqual(self.put(bad)[0], 400, bad)
             self.assertEqual(server.load_prefs()['stageColors']['deep'], '#0a0b0c')

@@ -12,6 +12,7 @@ function element(tag) {
     addEventListener(type, fn) { this.handlers[type] = fn; },
     append(...nodes) { this.children.push(...nodes); },
     replaceChildren(...nodes) { this.children = nodes; },
+    focus() { this.focused = true; },
     getBoundingClientRect() { return { left: 100, width: 320 }; } };
 }
 
@@ -106,7 +107,7 @@ test('colour pickers update and persist colours, and are disabled when read-only
   const t = setup(null);
   t.ctx.renderChartColors();
   const rows = t.ids['chart-colors'].children;
-  const input = rows[0].children[1];
+  const input = rows[0].children[2];
   assert.equal(input.type, 'color');
   input.value = '#112233';
   input.handlers.input();
@@ -117,7 +118,8 @@ test('colour pickers update and persist colours, and are disabled when read-only
   assert.equal(t.prefs().colors.heartRate, '#e57373');
   const locked = setup(null, { readOnly: true });
   locked.ctx.renderChartColors();
-  assert.equal(locked.ids['chart-colors'].children[0].children[1].disabled, true);
+  assert.equal(locked.ids['chart-colors'].children[0].children[2].disabled, true);
+  assert.equal(locked.ids['chart-colors'].children[0].children[0].disabled, true);  // drag handle
   assert.equal(locked.ids['chart-colors'].children.at(-1).disabled, true);
 });
 
@@ -177,4 +179,55 @@ test('opening one picker closes the other, and read-only never saves', () => {
   locked.ids['chart-colors'].hidden = false;
   assert.equal(locked.ctx.closeColorPopovers(), true);
   assert.equal(locked.fetches.length, 0);
+});
+
+const names = list => list.map(n => n.children[1].textContent);
+
+test('colour list, chips and readout follow the saved order', () => {
+  const session = { series: { ...series('heartRate', 5, 60), ...series('hrv', 5, 40), ...series('tempBedC', 5, 20) } };
+  const t = setup(session);
+  assert.deepEqual([...t.prefs().order], ['heartRate', 'hrv', 'tempBedC', 'respiratoryRate', 'tempRoomC']);
+  t.ctx.moveStream('tempBedC', 0);
+  t.prefs().active.push('hrv', 'tempBedC');
+  t.ctx.renderSessionChart();
+  assert.deepEqual([...t.prefs().order], ['tempBedC', 'heartRate', 'hrv', 'respiratoryRate', 'tempRoomC']);
+  assert.deepEqual(t.ids['chart-chips'].children.map(c => c.children[1].textContent), ['Bed Temp', 'Heart Rate', 'HRV', 'Resp Rate', 'Room Temp']);
+  t.svg().handlers.keydown({ key: 'Home', preventDefault() {} });
+  assert.match(t.ids['chart-readout'].textContent, /Bed 20°C · HR 60 · HRV 40$/);
+  t.ctx.renderChartColors();
+  assert.deepEqual(t.ids['chart-colors'].children.slice(0, 5).map(r => r.children[1].textContent), ['Bed Temp', 'Heart Rate', 'HRV', 'Resp Rate', 'Room Temp']);
+});
+
+test('moving a row with the arrow keys reorders, saves, and keeps focus on the moved row', () => {
+  const t = setup(null);
+  const box = t.ids['chart-colors'];
+  box.querySelectorAll = () => box.children.filter(c => c._key);
+  t.ctx.renderChartColors();
+  box.children[1]._handle.handlers.keydown({ key: 'ArrowUp', preventDefault() {} });   // HRV up
+  assert.deepEqual([...t.prefs().order].slice(0, 2), ['hrv', 'heartRate']);
+  assert.equal(box.children[0]._key, 'hrv');
+  assert.equal(box.children[0]._handle.focused, true);
+  t.timers[t.timers.length - 1]();
+  assert.deepEqual(JSON.parse(t.fetches[0].init.body).order.slice(0, 2), ['hrv', 'heartRate']);
+  box.children[0]._handle.handlers.keydown({ key: 'Enter', preventDefault() { throw Error('other keys are ignored'); } });
+});
+
+test('read-only devices cannot reorder, and reset restores the default order', () => {
+  const locked = setup(null, { readOnly: true });
+  locked.ctx.renderChartColors();
+  const box = locked.ids['chart-colors'];
+  box.querySelectorAll = () => box.children.filter(c => c._key);
+  box.children[1]._handle.handlers.keydown({ key: 'ArrowUp', preventDefault() {} });
+  assert.deepEqual([...locked.prefs().order].slice(0, 2), ['heartRate', 'hrv']);
+  const t = setup(null);
+  t.ctx.moveStream('hrv', 4);
+  t.ctx.renderChartColors();
+  t.ids['chart-colors'].children.at(-1).handlers.click();
+  assert.deepEqual([...t.prefs().order], ['heartRate', 'hrv', 'tempBedC', 'respiratoryRate', 'tempRoomC']);
+});
+
+test('stored order is validated and completed', () => {
+  const t = setup(null);
+  assert.deepEqual([...t.ctx.normalizeChartPrefs({ order: ['hrv', 'bogus', 'hrv', 'tempRoomC'] }).order], ['hrv', 'tempRoomC', 'heartRate', 'tempBedC', 'respiratoryRate']);
+  assert.deepEqual([...t.ctx.normalizeChartPrefs(null).order], ['heartRate', 'hrv', 'tempBedC', 'respiratoryRate', 'tempRoomC']);
 });
