@@ -126,7 +126,7 @@ let sessionRequest=0, sessionInFlight=null, sessionCheckedAt=null;
 // --- Session summary ---
 let nightIndex=0;
 const STAGE_DEFS=[['deep','Deep'],['rem','REM'],['light','Light'],['awake','Awake']];
-const SUMMARY_STREAMS=[['heartRate','HR',' bpm'],['hrv','HRV',' ms'],['respiratoryRate','Resp',''],['tempBedC','Bed',''],['tempRoomC','Room','']];
+const SUMMARY_STREAMS=[['heartRate','HR',' bpm'],['hrv','HRV',' ms'],['respiratoryRate','Resp',' brpm'],['tempBedC','Bed',''],['tempRoomC','Room','']];
 function formatDuration(seconds){if(!Number.isFinite(seconds)||seconds<0)return '—';const minutes=Math.round(seconds/60),hours=Math.floor(minutes/60);return hours?`${hours}h ${String(minutes%60).padStart(2,'0')}m`:`${minutes}m`;}
 function clockTime(value){const ms=Date.parse(value);return Number.isFinite(ms)?new Date(ms).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}):'—';}
 function dayLabel(value){const ms=Date.parse(value);return Number.isFinite(ms)?new Date(ms).toLocaleDateString(undefined,{month:'short',day:'numeric'}):'';}

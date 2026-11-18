@@ -69,6 +69,13 @@ test('night switcher steps through nights, updates everything, and disables at b
   assert.equal(vm.runInContext('nightIndex', t.ctx), 0);
 });
 
+test('respiratory average keeps its unit and one decimal', () => {
+  const resp = night('2026-11-14T22:00:00Z', { series: { respiratoryRate: [{ timestamp: '2026-11-14T22:00:00Z', value: 14 }, { timestamp: '2026-11-14T23:00:00Z', value: 15.4 }] } });
+  setup({ ...resp, sessions: [resp] });
+  const bio = ids['session-bio'].children.map(cell => texts(cell).join('/'));
+  assert.equal(bio[2], 'Resp/14.7 brpm/14.0–15.4');
+});
+
 test('Fahrenheit preference converts the temperature summary', () => {
   setup({ ...night('2026-11-14T22:00:00Z'), sessions: [night('2026-11-14T22:00:00Z')] }, { unit: 'F' });
   const bio = ids['session-bio'].children.map(cell => texts(cell).join('/'));
