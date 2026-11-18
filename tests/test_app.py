@@ -205,6 +205,7 @@ class ClientTests(unittest.TestCase):
             response = self.client.session_biometrics('left')
             files = list(Path(tmp).glob('*.json'))
             self.assertEqual(len(files), 16)  # even sessions beyond the 14 shown by the UI
+            self.assertTrue(any(p.name.startswith('left-2026-01-16T000000Z-') for p in files))
             self.assertEqual(len(response['sessions']), 14)
             saved = [json.loads(p.read_text(encoding='utf-8')) for p in files]
             newest = next(x for x in saved if x['interval']['id'] == 'session-15')
@@ -212,6 +213,7 @@ class ClientTests(unittest.TestCase):
             self.assertEqual(newest['interval']['timeseries']['unrecognizedFutureMetric'], [[1, 2]])
             self.assertNotIn('id', response['sessions'][0])
             intervals[-1]['extra']['value'] = 999
+            intervals[-1]['ts'] = '2026-01-16T01:00:00Z'  # corrected upstream: still one file
             self.client.transport = lambda method, url, payload, token: ({'days': []} if '/trends?' in url else transport(method, url, payload, token))
             self.client.session_biometrics('left')
             self.assertEqual(len(list(Path(tmp).glob('*.json'))), 16)

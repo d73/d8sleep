@@ -213,7 +213,17 @@ class EightClient:
             # A timestamp is the fallback when the upstream response has no session ID.
             identity = str(session_id) if session_id is not None else 'start:' + interval['ts']
             digest = hashlib.sha256(json.dumps([str(user_id), identity], ensure_ascii=True).encode()).hexdigest()
-            path = self.archive_dir / f'{side}-{digest}.json'
+            start = datetime.fromisoformat(interval['ts'].replace('Z', '+00:00')).astimezone(timezone.utc)
+            stamp = start.strftime('%Y-%m-%dT%H%M%SZ')
+            path = self.archive_dir / f'{side}-{stamp}-{digest}.json'
+            # If Eight Sleep corrects the start time, keep the existing file name and
+            # update its contents rather than creating a second file for that session.
+            try:
+                if not path.exists():
+                    path = next(self.archive_dir.glob(f'{side}-*-{digest}.json'), path)
+            except OSError:
+                logging.warning('Could not locate a sleep session archive; live data is still available.')
+                continue
             record = {'side': side, 'interval': interval, 'score': scores.get(str(session_id))}
             # A temporary /trends failure must not erase an already captured score.
             try:
