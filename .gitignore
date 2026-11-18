@@ -4,3 +4,5 @@ __pycache__/
 
 .d8sleep.pid
 .d8sleep-server*.log
+
+data/

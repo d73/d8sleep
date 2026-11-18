@@ -96,6 +96,10 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(result['metrics']['heartRate']['value'], 60)
         self.assertEqual(result['heart_rate_series'], [{'timestamp':'2026-01-02T01:00:00Z','value':55}, {'timestamp':'2026-01-02T01:20:00Z','value':60}])
         self.assertEqual(result['metrics']['tempBedC']['value'], 25.5)
+        self.assertEqual(result['series']['tempBedC'], [{'timestamp': '2026-01-02T01:00:00Z', 'value': 25.5}])
+        self.assertEqual(result['series']['heartRate'], result['heart_rate_series'])
+        self.assertEqual(result['series']['hrv'], [])
+        self.assertEqual(set(result['series']), {'heartRate', 'hrv', 'respiratoryRate', 'tempBedC', 'tempRoomC'})
         self.assertIsNone(result['metrics']['hrv'])
         self.assertIsNone(result['metrics']['tempRoomC'])
         self.assertNotIn('id', result)
@@ -141,6 +145,52 @@ class ServerTests(unittest.TestCase):
             status, data = self.request('/api/power', {'side': 'left', 'on': True})
         self.assertEqual(status, 403)
         self.assertIn('Read-only', data['error'])
+
+    def put(self, body, headers=None, host_origin=True):
+        port = self.httpd.server_port
+        conn = HTTPConnection('127.0.0.1', port)
+        head = {'Content-Type': 'application/json', 'Origin': f'http://127.0.0.1:{port}'}
+        head.update(headers or {})
+        conn.request('PUT', '/api/prefs', body if isinstance(body, str) else json.dumps(body), head)
+        res = conn.getresponse(); data = json.loads(res.read()); conn.close(); return res.status, data
+
+    def get_prefs(self):
+        conn = HTTPConnection('127.0.0.1', self.httpd.server_port)
+        conn.request('GET', '/api/prefs')
+        res = conn.getresponse(); data = json.loads(res.read()); conn.close(); return res.status, data
+
+    def test_prefs_validate_persist_and_reload(self):
+        import tempfile, pathlib
+        with tempfile.TemporaryDirectory() as tmp, patch.object(server, 'PREFS_PATH', pathlib.Path(tmp) / 'data' / 'prefs.json'):
+            status, data = self.get_prefs()
+            self.assertEqual(status, 200)
+            self.assertEqual(data['prefs']['active'], ['heartRate'])
+            self.assertEqual(data['prefs']['colors']['hrv'], server.DEFAULT_COLORS['hrv'])
+            status, data = self.put({'colors': {'heartRate': '#ABCDEF'}, 'active': ['hrv', 'heartRate']})
+            self.assertEqual(status, 200)
+            self.assertEqual(data['prefs']['colors']['heartRate'], '#abcdef')
+            self.assertEqual(data['prefs']['active'], ['heartRate', 'hrv'])
+            self.assertEqual(self.get_prefs()[1]['prefs'], data['prefs'])
+            self.assertEqual(server.load_prefs(), data['prefs'])  # survives a restart: read from disk
+            for bad in ({'colors': {'heartRate': 'red'}}, {'colors': {'bogus': '#000000'}}, {'active': ['nope']}, {'active': ['hrv', 'hrv']}, {'colors': []}, []):
+                self.assertEqual(self.put(bad)[0], 400, bad)
+            self.assertEqual(self.get_prefs()[1]['prefs'], data['prefs'])
+
+    def test_prefs_write_needs_this_pc_origin_and_json(self):
+        import tempfile, pathlib
+        with tempfile.TemporaryDirectory() as tmp, patch.object(server, 'PREFS_PATH', pathlib.Path(tmp) / 'prefs.json'):
+            self.assertEqual(self.put({'active': ['hrv']}, {'Origin': 'http://evil.example'})[0], 403)
+            self.assertEqual(self.put({'active': ['hrv']}, {'Content-Type': 'text/plain'})[0], 403)
+            with patch.object(server, 'local_client', return_value=False):
+                self.assertEqual(self.put({'active': ['hrv']})[0], 403)
+            self.assertFalse((pathlib.Path(tmp) / 'prefs.json').exists())
+
+    def test_corrupt_prefs_file_falls_back_to_defaults(self):
+        import tempfile, pathlib
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / 'prefs.json'
+            path.write_text('{not json', encoding='utf-8')
+            self.assertEqual(server.load_prefs(path), server.clean_prefs({}))
 
     def test_rejects_cross_origin(self):
         status,_ = self.request('/api/login', {'email':'a','password':'b'}, 'http://evil.test')

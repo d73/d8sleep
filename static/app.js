@@ -138,63 +138,86 @@ function renderSession(){
   const respiratory=session?.metrics?.respiratoryRate;stat('Resp rate',sampleText(respiratory,'respiratoryRate',' breaths/min'),respiratory?.timestamp);
   stat('Session start',when(session?.start));stat('Presence end',when(session?.presence_end));
   const stateBox=document.createElement('div'),stateLabel=document.createElement('span');stateBox.className='session-state-line';stateLabel.textContent='Session state';const stateChoices=choiceList([[false,'Complete'],[true,'Incomplete'],[null,'Not reported']],session?.incomplete??null);stateChoices.setAttribute('role','group');stateChoices.setAttribute('aria-label','Session states');stateBox.append(stateLabel,stateChoices);details.append(stateBox);
-  renderHeartChart(session?.heart_rate_series);
+  renderSessionChart(session);
 }
-function renderHeartChart(samples){
-  const container=$('heart-chart-content');container.replaceChildren();
-  const points=(Array.isArray(samples)?samples:[]).filter(p=>p&&typeof p.value==='number'&&Number.isFinite(p.value)&&typeof p.timestamp==='string'&&Number.isFinite(Date.parse(p.timestamp))).map(p=>({time:Date.parse(p.timestamp),value:p.value})).sort((a,b)=>a.time-b.time);
-  if(!points.length){const empty=document.createElement('p');empty.className='heart-chart-empty';empty.textContent='No heart-rate samples available for this session.';container.append(empty);return;}
-  const ns='http://www.w3.org/2000/svg', svg=document.createElementNS(ns,'svg');
+// --- Session chart ---
+const CHART_STREAMS=[['heartRate','Heart Rate','HR'],['hrv','HRV','HRV'],['tempBedC','Bed Temp','Bed'],['respiratoryRate','Resp Rate','Resp'],['tempRoomC','Room Temp','Room']];
+const CHART_DEFAULT_COLORS={heartRate:'#e57373',hrv:'#64b5f6',tempBedC:'#ffb74d',respiratoryRate:'#4db6ac',tempRoomC:'#9575cd'};
+const CHART_GAP_MS=30*60*1000, CHART_MATCH_MS=10*60*1000;
+let chartPrefs={colors:{...CHART_DEFAULT_COLORS},active:['heartRate']}, chartSession=null, chartSaveTimer=null;
+function isTempStream(key){return key==='tempBedC'||key==='tempRoomC';}
+function chartNumber(key,value){return isTempStream(key)&&unit==='F'?value*9/5+32:value;}
+function chartText(key,value){const n=chartNumber(key,value);if(isTempStream(key))return `${Math.round(n)}°${unit==='F'?'F':'C'}`;return key==='respiratoryRate'?n.toFixed(1):String(Math.round(n));}
+function chartPoints(session,key){const raw=session?.series?.[key]??(key==='heartRate'?session?.heart_rate_series:null);return (Array.isArray(raw)?raw:[]).filter(p=>p&&typeof p.value==='number'&&Number.isFinite(p.value)&&typeof p.timestamp==='string'&&Number.isFinite(Date.parse(p.timestamp))).map(p=>({time:Date.parse(p.timestamp),value:p.value})).sort((a,b)=>a.time-b.time);}
+function nearestIndex(list,time,get){let lo=0,hi=list.length-1;while(lo<hi){const mid=Math.floor((lo+hi)/2);if(get(list[mid])<time)lo=mid+1;else hi=mid;}return lo>0&&time-get(list[lo-1])<=get(list[lo])-time?lo-1:lo;}
+function normalizeChartPrefs(raw){const colors={...CHART_DEFAULT_COLORS};for(const [key] of CHART_STREAMS){const value=raw?.colors?.[key];if(typeof value==='string'&&/^#[0-9a-fA-F]{6}$/.test(value))colors[key]=value.toLowerCase();}const known=CHART_STREAMS.map(s=>s[0]);const active=Array.isArray(raw?.active)?known.filter(k=>raw.active.includes(k)):['heartRate'];return {colors,active};}
+function renderSessionChart(session){
+  if(session!==undefined)chartSession=session;
+  const container=$('heart-chart-content'),readout=$('chart-readout'),chips=$('chart-chips');container.replaceChildren();chips.replaceChildren();readout.textContent='';
+  const data={};for(const [key] of CHART_STREAMS)data[key]=chartPoints(chartSession,key);
+  for(const [key,label] of CHART_STREAMS){
+    const chip=document.createElement('button'),dot=document.createElement('i'),text=document.createElement('span'),on=chartPrefs.active.includes(key);
+    chip.type='button';chip.className='chart-chip';chip.setAttribute('aria-pressed',String(on));dot.className='chart-chip-dot';dot.style.background=chartPrefs.colors[key];text.textContent=label;chip.append(dot,text);
+    if(!data[key].length)chip.title='No samples in this session';
+    chip.addEventListener('click',()=>{chartPrefs.active=on?chartPrefs.active.filter(k=>k!==key):CHART_STREAMS.map(s=>s[0]).filter(k=>k===key||chartPrefs.active.includes(k));saveChartPrefs();renderSessionChart();});
+    chips.append(chip);
+  }
+  const active=CHART_STREAMS.filter(s=>chartPrefs.active.includes(s[0])&&data[s[0]].length);
+  if(!active.length){const empty=document.createElement('p');empty.className='heart-chart-empty';empty.textContent=chartPrefs.active.length?'No samples for the selected indicators in this session.':'Choose an indicator above.';container.append(empty);return;}
+  const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');
   const node=(name,attrs)=>{const e=document.createElementNS(ns,name);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));return e;};
-  let min=Infinity,max=-Infinity;for(const p of points){min=Math.min(min,p.value);max=Math.max(max,p.value);}
-  const low=Math.floor((min-5)/10)*10, high=Math.ceil((max+5)/10)*10;
-  const first=points[0].time,last=points[points.length-1].time, x=time=>first===last?173:36+(time-first)/(last-first)*274, y=value=>140-(value-low)/(high-low)*128;
-  svg.setAttribute('viewBox','0 0 320 160');svg.setAttribute('role','img');svg.setAttribute('tabindex','0');svg.setAttribute('aria-label',`Heart rate chart, ${points.length} ${points.length===1?'sample':'samples'}, range ${Math.round(min)} to ${Math.round(max)} beats per minute, from ${new Date(first).toLocaleString()} to ${new Date(last).toLocaleString()}. Use left and right arrow keys to inspect samples.`);
-  for(const value of [low,(low+high)/2,high]){const yy=y(value),line=node('line',{x1:36,x2:310,y1:yy,y2:yy,class:'chart-grid-line'}),label=node('text',{x:30,y:yy+3,'text-anchor':'end',class:'chart-axis-label'});label.textContent=String(Math.round(value));svg.append(line,label);}
-  let path='',gaps=false;
-  for(let i=0;i<points.length;i++){const p=points[i],separate=i===0||p.time-points[i-1].time>30*60*1000;if(i>0&&separate)gaps=true;path+=`${separate?'M':'L'}${x(p.time).toFixed(2)} ${y(p.value).toFixed(2)} `;}
-  svg.append(node('path',{d:path,class:'chart-line'}));
-  const stride=Math.max(1,Math.ceil(points.length/150));for(let i=0;i<points.length;i++){if(i%stride===0||i===points.length-1)svg.append(node('circle',{cx:x(points[i].time),cy:y(points[i].value),r:2.7,class:'chart-point'}));}
-  const detail=document.createElement('p');detail.className='heart-chart-detail';detail.setAttribute('aria-live','polite');
-  const hint='Hover, tap, or use arrow keys to inspect a sample.';detail.textContent=hint;
-  const selectedPoint=node('circle',{r:4.5,class:'chart-selected-point',visibility:'hidden'});svg.append(selectedPoint);
+  let first=Infinity,last=-Infinity;const times=new Set();
+  for(const [key] of active)for(const p of data[key]){first=Math.min(first,p.time);last=Math.max(last,p.time);times.add(p.time);}
+  const sorted=[...times].sort((a,b)=>a-b),single=active.length===1;
+  const x=time=>first===last?173:36+(time-first)/(last-first)*274;
+  const scale={};
+  for(const [key] of active){let min=Infinity,max=-Infinity;for(const p of data[key]){const n=chartNumber(key,p.value);min=Math.min(min,n);max=Math.max(max,n);}
+    if(single){const pad=Math.max((max-min)*0.1,key==='respiratoryRate'||isTempStream(key)?0.5:5);min-=pad;max+=pad;}
+    scale[key]={min,max,y:value=>{const n=chartNumber(key,value);return max===min?76:140-(n-min)/(max-min)*128;}};}
+  svg.setAttribute('viewBox','0 0 320 160');svg.setAttribute('role','img');svg.setAttribute('tabindex','0');
+  svg.setAttribute('aria-label',`Session chart of ${active.map(s=>s[1]).join(', ')}, from ${new Date(first).toLocaleString()} to ${new Date(last).toLocaleString()}. Use left and right arrow keys to inspect the session.`);
+  for(const fraction of [0,0.5,1]){const yy=140-fraction*128;svg.append(node('line',{x1:36,x2:310,y1:yy,y2:yy,class:'chart-grid-line'}));
+    if(single){const s=scale[active[0][0]],value=s.min+(s.max-s.min)*fraction,label=node('text',{x:30,y:yy+3,'text-anchor':'end',class:'chart-axis-label'});label.textContent=(s.max-s.min)<10?value.toFixed(1):String(Math.round(value));svg.append(label);}}
+  let gaps=false;
+  for(const [key] of active){let path='';const pts=data[key];for(let i=0;i<pts.length;i++){const split=i===0||pts[i].time-pts[i-1].time>CHART_GAP_MS;if(i>0&&split)gaps=true;path+=`${split?'M':'L'}${x(pts[i].time).toFixed(2)} ${scale[key].y(pts[i].value).toFixed(2)} `;}
+    const line=node('path',{d:path,class:'chart-line chart-series'});line.style.stroke=chartPrefs.colors[key];svg.append(line);}
+  const cross=node('line',{y1:12,y2:140,class:'chart-crosshair',visibility:'hidden'});svg.append(cross);
+  const markers=active.map(([key])=>{const m=node('circle',{r:4,class:'chart-selected-point',visibility:'hidden'});m.style.fill=chartPrefs.colors[key];svg.append(m);return m;});
   svg.append(node('rect',{x:0,y:0,width:320,height:160,fill:'transparent'}));
+  const hint='Hover, tap, or use arrow keys to inspect the session.';readout.textContent=hint;
   let selectedIndex=-1;
-  function showPoint(index){
-    if(index===selectedIndex)return;
-    selectedIndex=index;const point=points[index];
-    selectedPoint.setAttribute('cx',String(x(point.time)));selectedPoint.setAttribute('cy',String(y(point.value)));selectedPoint.setAttribute('visibility','visible');
-    detail.textContent=`${Math.round(point.value)} bpm · ${new Date(point.time).toLocaleString()}`;
+  function showIndex(index){
+    if(index===selectedIndex)return;selectedIndex=index;const time=sorted[index];
+    cross.setAttribute('x1',String(x(time)));cross.setAttribute('x2',String(x(time)));cross.setAttribute('visibility','visible');
+    const parts=[];
+    active.forEach(([key,,short],i)=>{const pts=data[key],j=nearestIndex(pts,time,p=>p.time),p=pts[j];
+      if(p&&Math.abs(p.time-time)<=CHART_MATCH_MS){parts.push(`${short} ${chartText(key,p.value)}`);markers[i].setAttribute('cx',String(x(p.time)));markers[i].setAttribute('cy',String(scale[key].y(p.value)));markers[i].setAttribute('visibility','visible');}
+      else{parts.push(`${short} —`);markers[i].setAttribute('visibility','hidden');}});
+    readout.textContent=`${new Date(time).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} · ${parts.join(' · ')}`;
   }
-  function selectAtPointer(event){
-    const rect=svg.getBoundingClientRect();if(!rect.width)return;
-    const position=(event.clientX-rect.left)*320/rect.width;
-    const fraction=Math.max(0,Math.min(1,(position-36)/274));
-    const time=first+(last-first)*fraction;
-    let lo=0,hi=points.length-1;
-    while(lo<hi){const mid=Math.floor((lo+hi)/2);if(points[mid].time<time)lo=mid+1;else hi=mid;}
-    const index=lo>0 && time-points[lo-1].time<=points[lo].time-time?lo-1:lo;
-    showPoint(index);
-  }
-  svg.addEventListener('pointermove',selectAtPointer);
-  svg.addEventListener('click',selectAtPointer);
-  svg.addEventListener('focus',()=>showPoint(Math.max(0,selectedIndex)));
-  svg.addEventListener('keydown',event=>{
-    let next=Math.max(0,selectedIndex);
-    if(event.key==='ArrowRight')next=Math.min(points.length-1,next+1);
-    else if(event.key==='ArrowLeft')next=Math.max(0,next-1);
-    else if(event.key==='Home')next=0;
-    else if(event.key==='End')next=points.length-1;
-    else return;
-    event.preventDefault();showPoint(next);
-  });
+  function selectAtPointer(event){const rect=svg.getBoundingClientRect();if(!rect.width)return;const position=(event.clientX-rect.left)*320/rect.width,fraction=Math.max(0,Math.min(1,(position-36)/274));showIndex(nearestIndex(sorted,first+(last-first)*fraction,t=>t));}
+  svg.addEventListener('pointermove',selectAtPointer);svg.addEventListener('click',selectAtPointer);
+  svg.addEventListener('focus',()=>showIndex(Math.max(0,selectedIndex)));
+  svg.addEventListener('keydown',event=>{let next=Math.max(0,selectedIndex);
+    if(event.key==='ArrowRight')next=Math.min(sorted.length-1,next+1);else if(event.key==='ArrowLeft')next=Math.max(0,next-1);else if(event.key==='Home')next=0;else if(event.key==='End')next=sorted.length-1;else return;
+    event.preventDefault();showIndex(next);});
   container.append(svg);
   const range=document.createElement('div');range.className='heart-chart-range';
-  const format=time=>new Date(time).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+  const format=time=>new Date(time).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
   const start=document.createElement('span');start.textContent=format(first);range.append(start);
-  if(last!==first){const end=document.createElement('span');end.textContent=format(last);range.append(end);}container.append(range,detail);
+  if(last!==first){const end=document.createElement('span');end.textContent=format(last);range.append(end);}container.append(range);
   if(gaps){const note=document.createElement('p');note.className='heart-chart-note';note.textContent='Gaps over 30 minutes are not connected.';container.append(note);}
 }
+function renderChartColors(){
+  const box=$('chart-colors');box.replaceChildren();
+  for(const [key,label] of CHART_STREAMS){const row=document.createElement('label'),text=document.createElement('span'),input=document.createElement('input');
+    row.className='chart-color-row';text.textContent=label;input.type='color';input.value=chartPrefs.colors[key];input.disabled=readOnly;input.setAttribute('aria-label',`${label} color`);
+    input.addEventListener('input',()=>{chartPrefs.colors[key]=input.value;saveChartPrefs();renderSessionChart();});row.append(text,input);box.append(row);}
+  const reset=document.createElement('button');reset.type='button';reset.className='chart-colors-reset';reset.textContent='Reset defaults';reset.disabled=readOnly;
+  reset.addEventListener('click',()=>{chartPrefs.colors={...CHART_DEFAULT_COLORS};saveChartPrefs();renderChartColors();renderSessionChart();});box.append(reset);
+}
+function saveChartPrefs(){clearTimeout(chartSaveTimer);chartSaveTimer=setTimeout(async()=>{try{await fetch('/api/prefs',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(chartPrefs)});}catch{}},300);}
+async function loadChartPrefs(){try{const data=await api('/api/prefs');chartPrefs=normalizeChartPrefs(data.prefs);}catch{}renderChartColors();renderSessionChart();}
 async function pollSession(){
   if(document.hidden||!selected||busy||dragging||sessionInFlight===selected)return;
   const side=selected, request=++sessionRequest;sessionInFlight=side;
@@ -269,3 +292,4 @@ for(const b of document.querySelectorAll('[data-close]'))b.onclick=()=>setDrawer
 $('drawer-backdrop').onclick=()=>{for(const d of document.querySelectorAll('.drawer.open'))setDrawer(d.id,false);};
 document.addEventListener('keydown',e=>{if(e.key==='Escape')for(const d of document.querySelectorAll('.drawer.open'))setDrawer(d.id,false);});
 for(const d of document.querySelectorAll('.drawer'))d.setAttribute('aria-hidden','true');
+$('chart-colors-btn').onclick=()=>{const box=$('chart-colors'),open=box.hidden;if(open)renderChartColors();box.hidden=!open;$('chart-colors-btn').setAttribute('aria-expanded',String(open));};void loadChartPrefs();
