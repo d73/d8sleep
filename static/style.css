@@ -242,3 +242,4 @@ main{padding-top:16px}.card-identity{display:flex;align-items:center;gap:10px;mi
 .chart-color-row{gap:8px}.chart-color-name{flex:1 1 auto}
 .drag-handle{border:0;background:transparent;color:inherit;opacity:.6;cursor:grab;font-size:14px;line-height:1;padding:4px 2px;touch-action:none;letter-spacing:-2px}.drag-handle:active{cursor:grabbing}.drag-handle:disabled{opacity:.25;cursor:not-allowed}
 .chart-color-row.dragging{opacity:.7;background:rgba(127,140,160,.15);border-radius:8px}
+.chart-color-row{cursor:grab;user-select:none}.chart-color-row input[type=color]{cursor:pointer}.chart-color-row.dragging{cursor:grabbing}.drag-handle{padding:6px 8px}
