@@ -271,3 +271,23 @@ test('saved preferences are requested when the page starts', () => {
   // Regression: an edit once dropped the startup call, so colors, indicators and order were saved but never loaded.
   assert.match(source, /^void loadChartPrefs\(\);\r?$/m);
 });
+
+test('multi-series chart collapses the empty left Y-axis gutter while single-series keeps it', () => {
+  const session = { series: { ...series('heartRate', 5, 60, 15), ...series('hrv', 5, 40, 15) } };
+  const t = setup(session);
+  const singleLines = t.svg().children.filter(n => n.tag === 'line' && n.attrs.class === 'chart-grid-line');
+  assert.equal(singleLines[0].attrs.x1, '36');
+  assert.equal(singleLines[0].attrs.x2, '310');
+  assert.ok(t.svg().children.some(n => n.tag === 'text' && n.attrs.class === 'chart-axis-label'));
+
+  t.prefs().active = ['heartRate', 'hrv'];
+  t.ctx.renderSessionChart();
+  const multiLines = t.svg().children.filter(n => n.tag === 'line' && n.attrs.class === 'chart-grid-line');
+  assert.equal(multiLines[0].attrs.x1, '8');
+  assert.equal(multiLines[0].attrs.x2, '312');
+  assert.equal(t.svg().children.some(n => n.tag === 'text' && n.attrs.class === 'chart-axis-label'), false);
+  const paths = t.svg().children.filter(n => n.tag === 'path');
+  assert.match(paths[0].attrs.d, /^M8\.00 /);
+  t.svg().handlers.click({ clientX: 100 + 8 + 0.5 * 304 });
+  assert.match(t.ids['chart-readout'].textContent, /HR 62 · HRV 42$/);
+});

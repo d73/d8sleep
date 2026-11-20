@@ -336,15 +336,15 @@ function renderSessionChart(session){
   const node=(name,attrs)=>{const e=document.createElementNS(ns,name);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));return e;};
   let first=Infinity,last=-Infinity;const times=new Set();
   for(const [key] of active)for(const p of data[key]){first=Math.min(first,p.time);last=Math.max(last,p.time);times.add(p.time);}
-  const sorted=[...times].sort((a,b)=>a-b),single=active.length===1;
-  const x=time=>first===last?173:36+(time-first)/(last-first)*274;
+  const sorted=[...times].sort((a,b)=>a-b),single=active.length===1,left=single?36:8,right=single?310:312,span=right-left;
+  const x=time=>first===last?(left+right)/2:left+(time-first)/(last-first)*span;
   const scale={};
   for(const [key] of active){let min=Infinity,max=-Infinity;for(const p of data[key]){const n=chartNumber(key,p.value);min=Math.min(min,n);max=Math.max(max,n);}
     if(single){const pad=Math.max((max-min)*0.1,key==='respiratoryRate'||isTempStream(key)?0.5:5);min-=pad;max+=pad;}
     scale[key]={min,max,y:value=>{const n=chartNumber(key,value);return max===min?76:140-(n-min)/(max-min)*128;}};}
   svg.setAttribute('viewBox','0 0 320 160');svg.setAttribute('role','img');svg.setAttribute('tabindex','0');
   svg.setAttribute('aria-label',`Session chart of ${active.map(s=>s[1]).join(', ')}, from ${new Date(first).toLocaleString()} to ${new Date(last).toLocaleString()}. Use left and right arrow keys to inspect the session.`);
-  for(const fraction of [0,0.5,1]){const yy=140-fraction*128;svg.append(node('line',{x1:36,x2:310,y1:yy,y2:yy,class:'chart-grid-line'}));
+  for(const fraction of [0,0.5,1]){const yy=140-fraction*128;svg.append(node('line',{x1:left,x2:right,y1:yy,y2:yy,class:'chart-grid-line'}));
     if(single){const s=scale[active[0][0]],value=s.min+(s.max-s.min)*fraction,label=node('text',{x:30,y:yy+3,'text-anchor':'end',class:'chart-axis-label'});label.textContent=(s.max-s.min)<10?value.toFixed(1):String(Math.round(value));svg.append(label);}}
   let gaps=false;
   for(const [key] of active){let path='';const pts=data[key],gapLimit=Math.max(CHART_GAP_MS,3*chartStep(pts));for(let i=0;i<pts.length;i++){const split=i===0||pts[i].time-pts[i-1].time>gapLimit;if(i>0&&split)gaps=true;path+=`${split?'M':'L'}${x(pts[i].time).toFixed(2)} ${scale[key].y(pts[i].value).toFixed(2)} `;}
@@ -364,7 +364,7 @@ function renderSessionChart(session){
       else{parts.push(`${short} —`);markers[i].setAttribute('visibility','hidden');}});
     readout.textContent=`${new Date(time).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} · ${parts.join(' · ')}`;
   }
-  function selectAtPointer(event){const rect=svg.getBoundingClientRect();if(!rect.width)return;const position=(event.clientX-rect.left)*320/rect.width,fraction=Math.max(0,Math.min(1,(position-36)/274));showIndex(nearestIndex(sorted,first+(last-first)*fraction,t=>t));}
+  function selectAtPointer(event){const rect=svg.getBoundingClientRect();if(!rect.width)return;const position=(event.clientX-rect.left)*320/rect.width,fraction=Math.max(0,Math.min(1,(position-left)/span));showIndex(nearestIndex(sorted,first+(last-first)*fraction,t=>t));}
   svg.addEventListener('pointermove',selectAtPointer);svg.addEventListener('click',selectAtPointer);
   svg.addEventListener('focus',()=>showIndex(Math.max(0,selectedIndex)));
   svg.addEventListener('keydown',event=>{let next=Math.max(0,selectedIndex);
