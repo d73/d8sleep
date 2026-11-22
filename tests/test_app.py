@@ -262,6 +262,20 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(server.valid_host('192.168.1.2:8787'))
         self.assertTrue(server.valid_host('localhost:8787'))
 
+    def test_favicons_are_linked_and_served_with_correct_types(self):
+        for url, mime, signature in [('/', 'text/html', b'/favicon.svg'),
+                                      ('/favicon.svg', 'image/svg+xml', b'<svg'),
+                                      ('/favicon.ico', 'image/x-icon', b'\x00\x00\x01\x00')]:
+            conn = HTTPConnection('127.0.0.1', self.httpd.server_port)
+            conn.request('GET', url)
+            res = conn.getresponse()
+            data = res.read()
+            self.assertEqual(res.status, 200)
+            self.assertTrue(res.getheader('Content-Type').startswith(mime))
+            self.assertIn(signature, data)
+            if url == '/': self.assertIn(b'/favicon.ico', data)
+            conn.close()
+
     def test_post_requires_this_pc(self):
         self.assertTrue(server.local_client('127.0.0.1'))
         self.assertTrue(server.local_client('::ffff:127.0.0.1'))
