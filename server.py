@@ -146,10 +146,16 @@ class Handler(BaseHTTPRequestHandler):
         global client
         if not valid_host(self.headers.get('Host', '')):
             return self.send(403, {'error': 'Use localhost or the computer’s LAN IP address.'})
-        if self.path in ('/', '/app.js', '/style.css'):
-            filename = {'/': 'index.html', '/app.js': 'app.js', '/style.css': 'style.css'}[self.path]
-            mime = {'index.html':'text/html', 'app.js':'text/javascript', 'style.css':'text/css'}[filename]
-            return self.send(200, (ROOT / 'static' / filename).read_bytes(), mime + '; charset=utf-8')
+        static = {
+            '/': ('index.html', 'text/html; charset=utf-8'),
+            '/app.js': ('app.js', 'text/javascript; charset=utf-8'),
+            '/style.css': ('style.css', 'text/css; charset=utf-8'),
+            '/favicon.svg': ('favicon.svg', 'image/svg+xml'),
+            '/favicon.ico': ('favicon.ico', 'image/x-icon'),
+        }
+        if self.path in static:
+            filename, mime = static[self.path]
+            return self.send(200, (ROOT / 'static' / filename).read_bytes(), mime)
         parsed = urlsplit(self.path)
         if parsed.path in ('/api/status', '/api/device', '/api/session'):
             with lock:
