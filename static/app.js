@@ -513,3 +513,15 @@ $('stage-colors-btn').onclick=()=>toggleColorPopover('stage-colors','stage-color
 document.addEventListener('click',event=>{if(event.target.closest&&event.target.closest('#chart-colors,#stage-colors,#chart-colors-btn,#stage-colors-btn'))return;closeColorPopovers();});
 // Load the saved chart preferences (colors, indicators, order, stage colors) once the page is ready.
 void loadChartPrefs();
+// Heartbeats run for open tabs, including background tabs, independently of Pod access.
+function heartbeat(){fetch('/api/heartbeat',{cache:'no-store'}).catch(()=>{});}
+heartbeat();setInterval(heartbeat,30000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)heartbeat();});
+const idleSelect=$('idle-timeout'), idleCustom=$('idle-custom'), idleRow=$('idle-custom-row');
+let idleSaved=0, idleWritable=false;
+function showIdle(value){idleSaved=value;const preset=['0','5','15','30','60'].includes(String(value));idleSelect.value=preset?String(value):'custom';idleRow.hidden=preset;if(!preset)idleCustom.value=String(value);}
+async function loadIdle(){try{const data=await api('/api/idle');idleWritable=!data.readonly;showIdle(data.minutes);idleSelect.disabled=!idleWritable;idleCustom.disabled=!idleWritable;}catch{$('idle-error').textContent='Could not load idle timeout.';}}
+async function saveIdle(value){if(!Number.isInteger(value)||(value!==0&&(value<5||value>1440))){$('idle-error').textContent='Enter a whole number from 5 to 1440.';return;}try{const response=await fetch('/api/idle',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({minutes:value})});const data=await response.json();if(!response.ok)throw Error(data.error);showIdle(data.minutes);$('idle-error').textContent='';}catch{showIdle(idleSaved);$('idle-error').textContent='Could not save idle timeout.';}}
+idleSelect.addEventListener('change',()=>{if(idleSelect.value==='custom'){idleRow.hidden=false;idleCustom.value=idleSaved||5;idleCustom.focus();}else{idleRow.hidden=true;void saveIdle(Number(idleSelect.value));}});
+idleCustom.addEventListener('change',()=>void saveIdle(idleCustom.value.trim()===''?NaN:Number(idleCustom.value)));
+void loadIdle();
