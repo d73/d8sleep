@@ -7,19 +7,69 @@ import tempfile
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from threading import RLock
+from threading import RLock, Thread
 from urllib.parse import urlsplit, parse_qs
 from eight import EightClient, ApiError
 
 ROOT = Path(__file__).resolve().parent
 lock = RLock()
 PREFS_PATH = ROOT / 'data' / 'prefs.json'
+IDLE_PATH = ROOT / 'data' / 'idle.json'
 STREAMS = ('heartRate', 'hrv', 'tempBedC', 'respiratoryRate', 'tempRoomC')
 DEFAULT_COLORS = {'heartRate': '#e57373', 'hrv': '#64b5f6', 'tempBedC': '#ffb74d', 'respiratoryRate': '#4db6ac', 'tempRoomC': '#9575cd'}
 STAGES = ('deep', 'rem', 'light', 'awake')
 DEFAULT_STAGE_COLORS = {'deep': '#5c6bc0', 'rem': '#ba68c8', 'light': '#4fc3f7', 'awake': '#ffb74d'}
 DEFAULT_PREFS = {'colors': dict(DEFAULT_COLORS), 'active': ['heartRate'], 'stageColors': dict(DEFAULT_STAGE_COLORS), 'order': list(STREAMS)}
 client = None
+
+def clean_idle(data):
+    value = data.get('minutes') if isinstance(data, dict) else None
+    if type(value) is not int or (value != 0 and not 5 <= value <= 1440):
+        raise ValueError('Idle timeout must be 0 or 5–1440 minutes.')
+    return {'minutes': value}
+
+def load_idle():
+    try:
+        return clean_idle(json.loads(IDLE_PATH.read_text(encoding='utf-8')))
+    except (OSError, ValueError):
+        return {'minutes': 0}
+
+class IdleServer(ThreadingHTTPServer):
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.activity_lock = RLock()
+        self.last_activity = time.monotonic()
+        self.active_requests = 0
+
+    def begin_request(self):
+        with self.activity_lock:
+            self.active_requests += 1
+            self.last_activity = time.monotonic()
+
+    def end_request(self):
+        with self.activity_lock:
+            self.active_requests -= 1
+            self.last_activity = time.monotonic()
+
+    def stop_when_idle(self):
+        while not self.idle_stop.wait(1):
+            minutes = load_idle()['minutes']
+            with self.activity_lock:
+                if minutes and not self.active_requests and time.monotonic() - self.last_activity >= minutes * 60:
+                    self.shutdown()
+                    return
+
+    def serve_until_idle(self):
+        from threading import Event
+        self.idle_stop = Event()
+        watcher = Thread(target=self.stop_when_idle, daemon=True)
+        watcher.start()
+        try:
+            self.serve_forever()
+        finally:
+            self.idle_stop.set()
+            watcher.join()
+            self.server_close()
 
 def load_env():
     path = ROOT / '.env'
@@ -128,6 +178,16 @@ def valid_host(host):
         return False
 
 class Handler(BaseHTTPRequestHandler):
+    def handle_one_request(self):
+        tracking = hasattr(self.server, 'begin_request')
+        if tracking:
+            self.server.begin_request()
+        try:
+            super().handle_one_request()
+        finally:
+            if tracking:
+                self.server.end_request()
+
     def log_message(self, fmt, *args):
         pass  # Never log credentials or request bodies.
 
@@ -157,6 +217,10 @@ class Handler(BaseHTTPRequestHandler):
             filename, mime = static[self.path]
             return self.send(200, (ROOT / 'static' / filename).read_bytes(), mime)
         parsed = urlsplit(self.path)
+        if parsed.path == '/api/heartbeat':
+            return self.send(200, {'ok': True})
+        if parsed.path == '/api/idle':
+            return self.send(200, {'minutes': load_idle()['minutes'], 'readonly': not local_client(self.client_address[0])})
         if parsed.path in ('/api/status', '/api/device', '/api/session'):
             with lock:
                 if client is None:
@@ -186,16 +250,18 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(403, {'error': 'Request origin is not allowed.'})
         if not local_client(self.client_address[0]):
             return self.send(403, {'error': 'Read-only from other devices. Use d8sleep on the PC it runs on.'})
-        if urlsplit(self.path).path != '/api/prefs':
+        path = urlsplit(self.path).path
+        if path not in ('/api/prefs', '/api/idle'):
             return self.send(404, {'error': 'Not found.'})
         try:
             length = int(self.headers.get('Content-Length', '0'))
             if not 0 < length <= 4096:
                 raise ValueError('Invalid request size.')
-            prefs = clean_prefs(json.loads(self.rfile.read(length)))
+            data = json.loads(self.rfile.read(length))
+            prefs = clean_idle(data) if path == '/api/idle' else clean_prefs(data)
             with lock:
-                save_prefs(prefs)
-            return self.send(200, {'prefs': prefs})
+                save_prefs(prefs, IDLE_PATH if path == '/api/idle' else None)
+            return self.send(200, prefs if path == '/api/idle' else {'prefs': prefs})
         except (ValueError, json.JSONDecodeError) as exc:
             return self.send(400, {'error': str(exc)})
         except OSError:
@@ -238,7 +304,7 @@ def main():
         client = EightClient(os.environ['EIGHT_EMAIL'], os.environ['EIGHT_PASSWORD'], archive_dir=ROOT / 'data' / 'sessions')
     port = int(os.getenv('PORT', '8787'))
     print(f'd8sleep: http://localhost:{port} (also available on your home network)')
-    ThreadingHTTPServer(('0.0.0.0', port), Handler).serve_forever()
+    IdleServer(('0.0.0.0', port), Handler).serve_until_idle()
 
 if __name__ == '__main__':
     main()

@@ -23,10 +23,11 @@ test('settings opens downwards and Escape closes it and returns focus', () => {
   assert.equal(focused, true);
 });
 
-test('settings presents three rows with icon-only display choices', () => {
+test('settings presents display choices and an idle timeout', () => {
   const html = fs.readFileSync(path.join(__dirname, '../static/index.html'), 'utf8');
   const panel = html.slice(html.indexOf('<section id="settings-panel"'), html.indexOf('</section>', html.indexOf('<section id="settings-panel"')));
-  assert.equal((panel.match(/class="settings-row"/g) || []).length, 3);
+  assert.equal((panel.match(/class="settings-row"/g) || []).length, 5);
+  assert.match(panel, /id="idle-timeout"/);
   assert.match(panel, /id="unit-off"[^>]*>Off<\/button>.*id="unit-c".*id="unit-f"/);
   assert.match(panel, /id="theme-day"[^>]*aria-label="Day mode"/);
   assert.match(panel, /id="theme-night"[^>]*aria-label="Night mode"/);

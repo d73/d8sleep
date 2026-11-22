@@ -157,6 +157,7 @@ main{padding-top:16px}
 .settings-panel{margin-top:12px;border-top:1px solid #353b49}
 .settings-panel[hidden]{display:none}
 .settings-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;color:#a8b0bd;font-size:13px}
+.settings-row[hidden]{display:none}.settings-row select,.settings-row input{max-width:150px;padding:6px 9px;border:1px solid #4a5261;border-radius:8px;background:#252c38;color:#eeeef1;font:inherit}.settings-row input{width:90px}:root[data-theme=day] .settings-row select,:root[data-theme=day] .settings-row input{background:#edf1f7;color:#344257;border-color:#b9c5d5}
 .accent-options{display:flex;align-items:center;gap:8px}
 .accent-choice{width:28px;height:28px;border:2px solid transparent;border-radius:50%;cursor:pointer}
 .accent-choice[aria-pressed=true]{outline:2px solid currentColor;outline-offset:2px}
