@@ -276,6 +276,34 @@ class ServerTests(unittest.TestCase):
             if url == '/': self.assertIn(b'/favicon.ico', data)
             conn.close()
 
+    def test_install_manifest_and_icons(self):
+        conn = HTTPConnection('127.0.0.1', self.httpd.server_port)
+        self.addCleanup(conn.close)
+        conn.request('GET', '/')
+        self.assertIn(b'<link rel="manifest" href="/manifest.webmanifest">', conn.getresponse().read())
+
+        conn.request('GET', '/manifest.webmanifest')
+        response = conn.getresponse()
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.getheader('Content-Type'), 'application/manifest+json')
+        manifest = json.loads(response.read())
+        for key in ('id', 'start_url', 'scope'):
+            self.assertEqual(manifest[key], '/')
+        self.assertEqual(manifest['display'], 'standalone')
+        self.assertEqual({icon['sizes'] for icon in manifest['icons']}, {'192x192', '512x512'})
+        for icon in manifest['icons']:
+            with self.subTest(icon=icon['src']):
+                conn.request('GET', icon['src'])
+                response = conn.getresponse()
+                self.assertEqual(response.status, 200)
+                self.assertEqual(response.getheader('Content-Type'), 'image/png')
+                png = response.read()
+                self.assertEqual(png[:8], b'\x89PNG\r\n\x1a\n')
+                self.assertEqual(png[12:16], b'IHDR')
+                width = int.from_bytes(png[16:20], 'big')
+                height = int.from_bytes(png[20:24], 'big')
+                self.assertEqual(f'{width}x{height}', icon['sizes'])
+
     def test_post_requires_this_pc(self):
         self.assertTrue(server.local_client('127.0.0.1'))
         self.assertTrue(server.local_client('::ffff:127.0.0.1'))

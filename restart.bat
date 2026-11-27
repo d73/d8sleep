@@ -1,5 +1,5 @@
 @echo off
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0minimize-console.ps1"
+echo Restarting d8sleep...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0app-control.ps1" stop
 if errorlevel 1 exit /b %errorlevel%
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0app-control.ps1" start

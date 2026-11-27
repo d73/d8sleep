@@ -13,11 +13,23 @@ EIGHT_PASSWORD=your-account-password
 
 On Windows, run `start.bat` from this folder to start the app in the background; run `stop.bat` to stop that instance, or `restart.bat` to restart it. All three return to the command prompt. Alternatively run `python server.py` in a terminal and stop it with Ctrl+C. Open http://localhost:8787 on the host computer. On a phone on the same trusted home network, open `http://<computer-LAN-IP>:8787`. Allow Python through the Windows firewall for private networks if needed. The host must remain running. Set `PORT` to change the port. Optional `EIGHT_CLIENT_ID` and `EIGHT_CLIENT_SECRET` override the public client values used by the community client.
 
-Settings → Stop when idle defaults to Never. You can select a timeout or enter 5–1440 minutes; the server stops after that long without an active browser page or request. Open pages send periodic heartbeats, including in background tabs, though browsers or devices that suspend a tab may stop sending them. Change the setting from the host computer. Restart the service after it stops.
+Settings → Stop when idle defaults to Never. You can select a timeout or enter 5–1440 minutes; the server stops after that long without an active browser page or request. Open pages send periodic heartbeats, including in background tabs, though browsers or devices that suspend a tab may stop sending them. Change the setting from the host computer. After an idle shutdown, reopen d8sleep from a configured Windows shortcut or run `start.bat`.
 
 Account credentials and tokens remain on the server and are never sent to phone browsers. The app uses HTTP and permits anyone on the trusted home network who can reach it to control the Pod; do not expose its port to the internet or use it on an untrusted network. `.env` is ignored by Git. Credentials in `.env` remain on disk.
 
 The web control and CLI use the app-style -10 to +10 scale; each step maps to 10 units on the unofficial API scale (-100 to +100). Non-integer readings are displayed without rounding away the reported value. The API reports device and target **levels**, not a verified thermometer reading. The degree estimate uses a community mapping and may not match the actual bed temperature. The app does not change alarm, base, or sleep-stage settings. Dual-side control depends on which user IDs the account can access.
+
+## Install on Windows
+
+With the server running, open http://localhost:8787 (or your configured port) in Edge or Chrome. In the browser menu, look for **Install d8sleep**. In Edge, check **Apps**. In Chrome, check **Cast, save, and share**.
+
+From this folder, run the following once to enable backend startup from the installed desktop and Windows Start menu shortcuts:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install-pwa-launcher.ps1
+```
+
+Open **d8sleep** from either shortcut. The launcher starts the Python backend in the background if needed, then opens the installed app in its existing browser profile. If the browser recreates the shortcuts after an update or reinstall, run the command again. To restore the browser's original shortcut targets, append `-Restore` to the command.
 
 ## Sleep session archive
 
@@ -27,15 +39,23 @@ These files contain sensitive sleep data and may include identifiers present in 
 
 ## Command line
 
-From a Windows command prompt in this folder (or use the full path to `pod.bat`), for example:
+Run `pod.bat` from a Windows command prompt. To use the commands below from any directory, add this folder to `PATH` or put a symbolic link to `pod.bat` in a folder already on `PATH`. You can also invoke `pod.bat` by its full path from any directory.
 
 ```bat
 pod.bat left on
 pod.bat left -5
 pod.bat left off
+pod.bat status
+pod.bat ui
+pod.bat left -5 ui
+pod.bat ui status
 ```
 
-Use `right` or `solo` for the corresponding side. The side is the first argument and may be omitted only when the account has one assigned side. Grammar: `pod [left|right|solo] on | off | LEVEL`. A level is a whole number from -10 to +10 (for example `pod.bat left -5`) and changes the target level only; use `on` separately to turn on an off side. The CLI connects directly using the same `.env` credentials, works without the web app, and returns a nonzero exit code on failure. For other systems, use `python pod.py` with the same arguments.
+`ui` opens the installed d8sleep PWA using its Windows Start menu or desktop shortcut. Use it alone or put it anywhere in a power, level, or status command. A combined command runs the Pod action first, then attempts to open the PWA even if the action fails. It returns a nonzero exit code if either step fails. Configure the shortcut as described in [Install on Windows](#install-on-windows) so it starts the backend when needed.
+
+Use `right` or `solo` for the corresponding side. The side is the first argument and may be omitted for `status`, or for other commands when the account has one assigned side. Grammar: `pod [left|right|solo] on | off | LEVEL | status`. A level is a whole number from -10 to +10 (for example `pod.bat left -5`). The level command first requests that the side turn on, then sets the target level, reporting each request. An accepted request does not independently verify the Pod's physical state. The CLI connects directly using the same `.env` credentials, works without the web app, and returns a nonzero exit code on failure. For other systems, use `python pod.py` with the same arguments.
+
+`pod.bat status` reports each available side, for example `left: on 6/10 (current/target)`. Levels are on the -10 to +10 app scale; `?` means a reading is unavailable. Use `pod.bat left status` to show one side. The current level is a reported device level, not a measured temperature.
 
 ## Test
 

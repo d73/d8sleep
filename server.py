@@ -212,6 +212,9 @@ class Handler(BaseHTTPRequestHandler):
             '/style.css': ('style.css', 'text/css; charset=utf-8'),
             '/favicon.svg': ('favicon.svg', 'image/svg+xml'),
             '/favicon.ico': ('favicon.ico', 'image/x-icon'),
+            '/manifest.webmanifest': ('manifest.webmanifest', 'application/manifest+json'),
+            '/icon-192.png': ('icon-192.png', 'image/png'),
+            '/icon-512.png': ('icon-512.png', 'image/png'),
         }
         if self.path in static:
             filename, mime = static[self.path]
